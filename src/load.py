@@ -49,7 +49,9 @@ def load_pdf_file(file_path):
     for index in range(len(reader.pages)):
         page = reader.pages[index]
         page_number = index + 1
-        text = page.extract_text()
+        text = page.extract_text(
+            extraction_mode="layout"
+        )
 
         if text is None or text.strip() == "":
             continue
