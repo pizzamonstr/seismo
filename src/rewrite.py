@@ -14,6 +14,11 @@ Rules:
 make it complete on its own. Example: "What about February?" \
 after "What was Meta's CPA in January 2025?" becomes "What was \
 Meta's CPA in February 2025?"
+- In a follow-up, keep the metric and channel but do not carry \
+over a direction like "go up" or "drop". Ask how it changed \
+instead. Example: "What about April?" after "Why did Meta CPA \
+go up in March 2025?" becomes "How did Meta CPA change in \
+April 2025, and why?"
 - Keep every channel, metric, product, person and time period \
 the user gave. Do not add new facts, dates or details.
 - Tephra's product names include Matier, Rohr, Fissile, Pylon, \
