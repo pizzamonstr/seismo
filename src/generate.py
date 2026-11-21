@@ -164,6 +164,54 @@ def find_citations(answer_text, results):
     return citations
 
 
+def renumber_tags(text, mapping, source_count):
+    """Swap [S5] style tags for [1], [2] in order of first use."""
+    def swap(match):
+        number = int(match.group(1))
+        if number < 1 or number > source_count:
+            return ""
+        if number not in mapping:
+            mapping[number] = len(mapping) + 1
+        return f"[{mapping[number]}]"
+    return re.sub(CITATION_PATTERN, swap, text)
+
+
+def renumber_stream(pieces, mapping, source_count):
+    """Renumber citation tags while the answer streams in."""
+    held = ""
+    for piece in pieces:
+        held = held + piece
+        cut = held.rfind("[")
+        if cut != -1 and "]" not in held[cut:]:
+            ready = held[:cut]
+            held = held[cut:]
+        else:
+            ready = held
+            held = ""
+        if ready != "":
+            yield renumber_tags(ready, mapping, source_count)
+    held = re.sub(r"\[S?\d*$", "", held)
+    if held != "":
+        yield renumber_tags(held, mapping, source_count)
+
+
+def citations_from_mapping(mapping, results):
+    """List the cited sources in their new display order."""
+    citations = []
+    for old_number in mapping:
+        metadata = results[old_number - 1]["metadata"]
+        citation = {
+            "number": mapping[old_number],
+            "title": metadata["title"],
+            "section": metadata["section"],
+            "date": metadata.get("date", ""),
+            "source": metadata["source"],
+            "page": metadata.get("page", ""),
+        }
+        citations.append(citation)
+    return citations
+
+
 def build_not_found_text(closest):
     """Explain a miss and name the closest documents."""
     if len(closest) == 0:

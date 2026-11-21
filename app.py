@@ -1,5 +1,6 @@
 """Seismo: a metric investigation assistant for Tephra."""
 
+import time
 from datetime import date
 
 import openai
@@ -12,8 +13,9 @@ from src.generate import (
     ERROR_MESSAGE,
     TOO_LONG_MESSAGE,
     build_fallback_text,
-    find_citations,
+    citations_from_mapping,
     prepare,
+    renumber_stream,
     stream_answer,
 )
 
@@ -55,6 +57,9 @@ ERROR_MESSAGES = {
     "library": "My document library isn't loaded right now. Please "
                "try again in a few minutes.",
 }
+FOUND_VIA_OPTIONS = [
+    "LinkedIn", "Portfolio site", "UBC class", "Somewhere else",
+]
 STARTER_QUESTIONS = [
     "Why did Meta ROAS jump to 5.4 in September 2025?",
     "Did the GA4 consent mode change in May 2025 cause lost sales?",
@@ -134,6 +139,8 @@ def start_session():
         st.session_state.starter = ""
     if "questions_asked" not in st.session_state:
         st.session_state.questions_asked = 0
+    if "found_via" not in st.session_state:
+        st.session_state.found_via = ""
 
 
 def show_sources(citations):
@@ -143,7 +150,7 @@ def show_sources(citations):
     with st.expander("View sources"):
         for citation in citations:
             line = (
-                f"**[S{citation['number']}]** {citation['title']} "
+                f"**[{citation['number']}]** {citation['title']} "
                 f"> {citation['section']}"
             )
             st.markdown(line)
@@ -168,8 +175,33 @@ def make_reporter(status):
     return report
 
 
+def build_timings(details, write_seconds, total_seconds):
+    """List how long each step took, for the status panel."""
+    search_seconds = (
+        details.get("embed_seconds", 0)
+        + details.get("search_seconds", 0)
+    )
+    return [
+        f"Understanding the question: "
+        f"{details.get('rewrite_seconds', 0):.1f} s",
+        f"Searching the documents: {search_seconds:.1f} s",
+        f"Weighing the evidence: "
+        f"{details.get('rerank_seconds', 0):.1f} s",
+        f"Writing the answer: {write_seconds:.1f} s",
+        f"Total: {total_seconds:.1f} s",
+    ]
+
+
+def show_timings(status, timings):
+    """Add the step timings inside a status panel."""
+    if len(timings) == 0:
+        return
+    status.caption("  \n".join(timings))
+
+
 def answer_in_chat(question, openai_client, collection):
     """Retrieve with status steps, stream the answer, show sources."""
+    start = time.perf_counter()
     status = st.status(STEP_LABELS["rewrite"], expanded=False)
     try:
         question, results, details = prepare(
@@ -184,28 +216,38 @@ def answer_in_chat(question, openai_client, collection):
             status.update(label=summary, state="complete")
             text = fallback_text(details)
             st.markdown(text)
-            return text, [], details, summary
+            return text, [], details, summary, []
 
         status.update(label=STEP_LABELS["write"])
         status.write(STEP_LABELS["write"])
+        write_start = time.perf_counter()
         search_text = details.get("search_text", question)
+        mapping = {}
+        pieces = stream_answer(search_text, results, openai_client)
         text = st.write_stream(
-            stream_answer(search_text, results, openai_client)
+            renumber_stream(pieces, mapping, len(results))
         )
+        write_seconds = time.perf_counter() - write_start
     except Exception as error:
         print(f"Seismo error: {error}")
         summary = "Hit a snag"
         status.update(label=summary, state="error")
         text = friendly_error(error)
         st.markdown(text)
-        return text, [], {"status": "error"}, summary
+        return text, [], {"status": "error"}, summary, []
 
+    total_seconds = time.perf_counter() - start
+    timings = build_timings(details, write_seconds, total_seconds)
+    show_timings(status, timings)
     checked = details.get("rerank_pool", len(results))
-    summary = f"Read {checked} passages, kept {len(results)}"
+    summary = (
+        f"Read {checked} passages, kept {len(results)} "
+        f"({total_seconds:.1f} s)"
+    )
     status.update(label=summary, state="complete")
-    citations = find_citations(text, results)
+    citations = citations_from_mapping(mapping, results)
     show_sources(citations)
-    return text, citations, details, summary
+    return text, citations, details, summary, timings
 
 
 def pick_avatar(role):
@@ -224,9 +266,27 @@ def show_history():
         with st.chat_message(role, avatar=pick_avatar(role)):
             summary = message.get("summary", "")
             if summary != "":
-                st.status(summary, state="complete", expanded=False)
+                status = st.status(
+                    summary, state="complete", expanded=False
+                )
+                show_timings(status, message.get("timings", []))
             st.markdown(message["content"])
             show_sources(message.get("citations", []))
+
+
+def show_found_via():
+    """Ask, once and optionally, how the visitor found Seismo."""
+    if st.session_state.found_via != "":
+        return
+    picked = st.pills(
+        "Quick question, totally optional: where did you find Seismo?",
+        FOUND_VIA_OPTIONS,
+        selection_mode="single",
+        key="found_via_pick",
+    )
+    if picked is not None:
+        st.session_state.found_via = picked
+        st.rerun()
 
 
 def pick_starter(question):
@@ -308,6 +368,7 @@ def chat_tab(openai_client, collection):
         elif question:
             ask_seismo(question, openai_client, collection)
         elif len(st.session_state.messages) == 0:
+            show_found_via()
             show_starters()
 
     if len(st.session_state.messages) > 0:
@@ -327,7 +388,7 @@ def ask_seismo(question, openai_client, collection):
         st.markdown(question)
 
     with st.chat_message("assistant", avatar=SEISMO_AVATAR):
-        text, citations, details, summary = answer_in_chat(
+        text, citations, details, summary, timings = answer_in_chat(
             question, openai_client, collection
         )
     if details["status"] == "ok":
@@ -338,6 +399,7 @@ def ask_seismo(question, openai_client, collection):
         "content": text,
         "citations": citations,
         "summary": summary,
+        "timings": timings,
     })
 
 
