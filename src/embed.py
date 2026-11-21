@@ -19,6 +19,7 @@ EMBEDDING_MODEL = "text-embedding-3-small"
 CHROMA_FOLDER = "chroma_db"
 SECRETS_FILE = Path(".streamlit/secrets.toml")
 BATCH_SIZE = 100
+PIPELINE_VERSION = "5"
 
 
 def get_api_key():
@@ -67,9 +68,10 @@ def embed_texts(openai_client, texts, model=EMBEDDING_MODEL):
 
 
 def file_hash(metadata):
-    """Make a fingerprint of a file from its contents."""
+    """Fingerprint a file's contents and the pipeline version."""
     file_path = DOCS_FOLDER / metadata["folder"] / metadata["source"]
     contents = file_path.read_bytes()
+    contents = contents + PIPELINE_VERSION.encode()
     return hashlib.sha256(contents).hexdigest()
 
 

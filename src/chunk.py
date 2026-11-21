@@ -50,6 +50,22 @@ def find_document_date(text, source):
     return date_from_filename(source)
 
 
+def find_heading_date(heading):
+    """Find a date at the start of a heading, if any."""
+    iso_date = re.match(r"\d{4}-\d{2}-\d{2}", heading)
+    if iso_date is not None:
+        return iso_date.group()
+    written_date = parse_written_date(heading)
+    if written_date != "":
+        return written_date
+    pattern = "(" + MONTHS + r") (\d{4})"
+    month_year = re.search(pattern, heading)
+    if month_year is not None:
+        found = datetime.strptime(month_year.group(), "%B %Y")
+        return found.strftime("%Y-%m")
+    return ""
+
+
 def make_chunk_text(title, section, body):
     """Put the title and section above the chunk's text."""
     return f"{title}\nSection: {section}\n\n{body}"
@@ -64,6 +80,50 @@ def find_last_table_header(body):
             header = line
         previous = line
     return header
+
+
+def split_cells(line):
+    """Split a table row into its cells."""
+    cells = []
+    for cell in line.split("|"):
+        cells.append(cell.strip())
+    return cells
+
+
+def row_to_sentence(headers, cells):
+    """Turn a table row into a plain-language line."""
+    parts = []
+    for index in range(1, len(cells)):
+        if cells[index] == "":
+            continue
+        label = ""
+        if index < len(headers):
+            label = headers[index]
+        parts.append((label + " " + cells[index]).strip())
+    if len(parts) == 0:
+        return cells[0]
+    return cells[0] + ": " + "; ".join(parts) + "."
+
+
+def tables_to_sentences(body):
+    """Rewrite table rows as sentences, and list the rows."""
+    output_lines = []
+    row_sentences = []
+    headers = []
+    previous = ""
+    for line in body.split("\n"):
+        if is_table_row(line):
+            cells = split_cells(line)
+            if not is_table_row(previous):
+                headers = cells
+            else:
+                sentence = row_to_sentence(headers, cells)
+                output_lines.append(sentence)
+                row_sentences.append(sentence)
+        else:
+            output_lines.append(line)
+        previous = line
+    return "\n".join(output_lines), row_sentences
 
 
 def split_long_text(body):
@@ -102,7 +162,7 @@ def split_long_text(body):
 
 
 def add_chunks(chunks, document, title, section, body, date,
-               counters):
+               counters, chunk_type="section"):
     """Turn one section into chunks and add them."""
     body = body.strip()
     if body == "":
@@ -116,8 +176,11 @@ def add_chunks(chunks, document, title, section, body, date,
         number = counters[source]
 
         metadata = dict(document["metadata"])
+        metadata["title"] = title.split("\n")[0]
         metadata["section"] = section
         metadata["date"] = date
+        metadata["month"] = date[:7]
+        metadata["chunk_type"] = chunk_type
         metadata["chunk_id"] = f"{stem}-{number:03d}"
 
         chunk = {
@@ -182,9 +245,9 @@ def chunk_markdown(document, chunks, counters):
     for section in sections:
         heading = section["heading"]
         date = document_date
-        heading_date = re.match(r"\d{4}-\d{2}-\d{2}", heading)
-        if heading_date is not None:
-            date = heading_date.group()
+        heading_date = find_heading_date(heading)
+        if heading_date != "":
+            date = heading_date
         add_chunks(chunks, document, title, heading,
                    section["body"], date, counters)
 
@@ -276,6 +339,19 @@ def split_pdf_page(text):
     return sections
 
 
+def find_pdf_title(text, fallback):
+    """Build a title from the first lines of a PDF page."""
+    lines = []
+    for line in text.split("\n"):
+        if line.strip() != "":
+            lines.append(line.strip())
+    if len(lines) >= 2 and lines[0].isupper():
+        return lines[0].title() + ": " + lines[1]
+    if len(lines) >= 1:
+        return lines[0]
+    return fallback
+
+
 def chunk_pdf_page(document, chunks, counters, carry):
     """Chunk one PDF page, carrying headings across pages."""
     text = document["text"]
@@ -286,6 +362,7 @@ def chunk_pdf_page(document, chunks, counters, carry):
         carry["source"] = source
         carry["heading"] = "Overview"
         carry["table_header"] = ""
+        carry["title"] = find_pdf_title(text, metadata["title"])
 
     date = find_document_date(text, source)
 
@@ -308,8 +385,13 @@ def chunk_pdf_page(document, chunks, counters, carry):
         if last_header != "":
             carry["table_header"] = last_header
 
-        add_chunks(chunks, document, metadata["title"],
+        body, row_sentences = tables_to_sentences(body)
+        add_chunks(chunks, document, carry["title"],
                    heading, body, date, counters)
+        for sentence in row_sentences:
+            add_chunks(chunks, document, carry["title"],
+                       heading, sentence, date, counters,
+                       "table row")
 
 
 def chunk_documents(documents):

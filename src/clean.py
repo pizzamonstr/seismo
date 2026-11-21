@@ -68,11 +68,33 @@ def add_to_row(row, segments, column_starts):
             row[column] = row[column] + " " + text
 
 
+def place_cells(segments, column_spans):
+    """Put each piece under the column it is closest to."""
+    row = [""] * len(column_spans)
+    for start, text in segments:
+        center = start + len(text) / 2
+        best_column = 0
+        best_gap = None
+        for index in range(len(column_spans)):
+            span_start, span_end = column_spans[index]
+            column_center = (span_start + span_end) / 2
+            gap = abs(center - column_center)
+            if best_gap is None or gap < best_gap:
+                best_column = index
+                best_gap = gap
+        if row[best_column] == "":
+            row[best_column] = text
+        else:
+            row[best_column] = row[best_column] + " " + text
+    return row
+
+
 def rebuild_tables(text):
     """Rebuild table rows, with wrapped cells put back."""
     lines = text.split("\n")
     output_lines = []
     column_starts = []
+    column_spans = []
     row = []
     can_continue = False
 
@@ -102,12 +124,18 @@ def rebuild_tables(text):
             if len(column_starts) == 0:
                 for start, cell in segments:
                     column_starts.append(start)
-            for start, cell in segments:
-                row.append(cell)
+                    end = start + len(cell)
+                    column_spans.append((start, end))
+            if len(segments) < len(column_spans):
+                row = place_cells(segments, column_spans)
+            else:
+                for start, cell in segments:
+                    row.append(cell)
             can_continue = True
         else:
             output_lines.append(line)
             column_starts = []
+            column_spans = []
             can_continue = False
 
     if len(row) > 0:
