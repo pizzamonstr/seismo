@@ -1,0 +1,16 @@
+Slack export: #marketing
+Workspace: Tephra
+Period: February 1, 2025 to February 28, 2025
+
+[2025-02-03 08:05] Priya Sandhu: Mackenzie launch day! "Pull the Handle" is live on site and in Meta.
+[2025-02-03 08:30] Rafe Okafor: So proud of this one. Two years of testing.
+[2025-02-05 13:12] Marcus Webb (Tarn Digital): January report sent to marketing@. Headline: +12% YoY, on plan.
+[2025-02-11 07:45] Jordan Leclerc: Basalt theme is live. Theo ran test orders and purchases are showing in GA4, Meta and Google Ads.
+[2025-02-11 07:58] Priya Sandhu: Site feels so much faster on my phone.
+[2025-02-11 08:10] Jordan Leclerc: Mobile Lighthouse went from 41 to 73.
+[2025-02-14 12:20] Sofia Kim (Tarn Digital): Mackenzie retargeting is doing really well. 4.8 ROAS in the first 10 days.
+[2025-02-19 10:02] Dana MacLeod: FYI, Mackenzie stock is fine, 230 units on hand.
+[2025-02-24 15:33] Sofia Kim (Tarn Digital): Frequency on Mackenzie retargeting is up to 3.2. We'll plan a creative refresh for March.
+[2025-02-26 09:10] Jordan Leclerc: Free shipping over $150 banner is live.
+[2025-02-27 16:44] Priya Sandhu: TikTok check in? How's it looking?
+[2025-02-27 16:58] Marcus Webb (Tarn Digital): Still weak. About $220 CPA this month, against our $140 target. We'll finish the quarter as agreed and give you a full read in the March report.

@@ -1,0 +1,23 @@
+Slack export: #marketing
+Workspace: Tephra
+Period: March 1, 2025 to March 31, 2025
+
+[2025-03-05 10:14] Marcus Webb (Tarn Digital): February report sent. +10% YoY, 2% under plan. Mackenzie launch strong.
+[2025-03-07 14:22] Sofia Kim (Tarn Digital): Meta retargeting ROAS is softening this week. Down to about 2.5. Frequency on Mackenzie retargeting is 3.9.
+[2025-03-07 14:30] Priya Sandhu: Is that just the creative wearing out?
+[2025-03-07 14:41] Sofia Kim (Tarn Digital): Most likely. We have three new Mackenzie videos in production for early April.
+[2025-03-11 11:05] Priya Sandhu: Notes from today's standup are in the drive. Short version: Meta retargeting is weak, agency thinks creative fatigue, refresh coming in April.
+[2025-03-14 09:48] Ingrid Halvorsen: Revenue month to date is behind plan. Anything I should know?
+[2025-03-14 10:02] Priya Sandhu: Mostly Meta retargeting. We think it's creative fatigue on Mackenzie. New creative is coming.
+[2025-03-18 08:57] Priya Sandhu: Something weird. I was in Ads Manager and our AG-30 audience (avy gear viewers, 30 days) is 5,600 people. It was over 23,000 at the start of February. ENG-60 is down to 6,900 from about 29,700.
+[2025-03-18 09:03] Priya Sandhu: Our traffic hasn't dropped anywhere near that much. Did something stop feeding these audiences?
+[2025-03-18 09:15] Jordan Leclerc: Checking Events Manager... AvyGearView and Engaged60s haven't fired since February 11. That's the theme launch day.
+[2025-03-18 09:16] Jordan Leclerc: @Theo Nakamura can you look at this?
+[2025-03-18 10:40] Theo Nakamura: Found it. Those two custom events came from an old script in theme.liquid that I removed during the Basalt migration. It wasn't in the tracking spec, so I thought it was leftover code. Sorry everyone.
+[2025-03-18 10:44] Theo Nakamura: I'll rebuild it as a custom pixel in Customer Events so it doesn't depend on the theme anymore. Can have it live by Thursday.
+[2025-03-18 10:52] Priya Sandhu: So retargeting has been running on audiences that were shrinking for five weeks. That explains a lot more than creative fatigue.
+[2025-03-18 10:55] Marcus Webb (Tarn Digital): Agreed, that would push frequency up too, since we're showing ads to fewer people. We'll keep the creative refresh but this is likely the bigger factor.
+[2025-03-20 15:30] Theo Nakamura: Custom pixel is live. Both events showing in Events Manager. Audiences use a 30-day window so they'll take around four weeks to rebuild.
+[2025-03-20 15:41] Priya Sandhu: Thank you. Can you add it to the tracking spec so this never happens again?
+[2025-03-20 15:43] Theo Nakamura: Yes, I'll update the spec.
+[2025-03-31 17:10] Sofia Kim (Tarn Digital): TikTok campaigns paused as planned. Final numbers in the March report.

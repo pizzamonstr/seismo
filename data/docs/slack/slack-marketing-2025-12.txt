@@ -1,0 +1,13 @@
+Slack export: #marketing
+Workspace: Tephra
+Period: December 1, 2025 to December 31, 2025
+
+[2025-12-01 09:00] Priya Sandhu: Cyber Monday is live.
+[2025-12-03 15:30] Priya Sandhu: Black Friday postmortem notes are up in the drive.
+[2025-12-04 10:20] Marcus Webb (Tarn Digital): November report sent. +4% YoY, 7% under plan. We've recommended adding us to inventory alerts, which Dana has already done.
+[2025-12-12 11:00] Dana MacLeod: Fissile shipment arrived! Receiving and QC today and Monday. Should be sellable Monday Dec 15.
+[2025-12-15 08:15] Jordan Leclerc: Fissile is back in stock on site.
+[2025-12-16 09:10] Sofia Kim (Tarn Digital): Fissile campaigns relaunched.
+[2025-12-17 14:00] Ingrid Halvorsen: December is tracking well. Snow plus Fissile back.
+[2025-12-22 12:30] Priya Sandhu: Office closes Dec 24 to Jan 1. See the holiday closure doc for shipping cutoffs.
+[2025-12-31 16:00] Jordan Leclerc: December finished at +9% on last year. December was about 13% lower than November, which is normal after Black Friday.

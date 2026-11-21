@@ -1,0 +1,16 @@
+Slack export: #marketing
+Workspace: Tephra
+Period: January 1, 2025 to January 31, 2025
+
+[2025-01-06 09:12] Marcus Webb (Tarn Digital): TikTok test is live as of this morning. $4,500/month, two prospecting ad groups: splitboard POV clips and the avy kit unboxing. We'll give it the full quarter before judging.
+[2025-01-06 09:20] Priya Sandhu: Great. Reminder that our target CPA for prospecting is $140. I know TikTok will be higher while it learns.
+[2025-01-06 09:21] Marcus Webb (Tarn Digital): Understood. We'll report it separately each month.
+[2025-01-13 14:03] Sofia Kim (Tarn Digital): Matier "Deep Days" creative is live in Meta prospecting.
+[2025-01-15 10:47] Jordan Leclerc: Heads up, Plinth size 27.5 is down to 6 units. Dana says more arriving Feb 4.
+[2025-01-15 10:52] Priya Sandhu: Thanks. Not worth pausing anything for one size.
+[2025-01-22 16:30] Sofia Kim (Tarn Digital): Deep Days is now our top prospecting ad. 2.6 ROAS after nine days.
+[2025-01-22 16:31] Priya Sandhu: Love it. The pillow drop clip is so good.
+[2025-01-28 11:15] Jordan Leclerc: Theo says the new Basalt theme is ready for review. Target launch Feb 11. Page speed on mobile is way better in staging.
+[2025-01-28 11:18] Priya Sandhu: Any risk to tracking?
+[2025-01-28 11:24] Jordan Leclerc: He's checking purchase events on GA4, Meta and Google after launch. Should be fine.
+[2025-01-31 15:40] Ingrid Halvorsen: Great January team. On plan and +12% on last year.

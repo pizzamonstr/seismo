@@ -1,0 +1,14 @@
+# Secrets
+.streamlit/secrets.toml
+.env
+
+# Vector database
+chroma_db/
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Mac
+.DS_Store

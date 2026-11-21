@@ -1,0 +1,20 @@
+Slack export: #marketing
+Workspace: Tephra
+Period: October 1, 2025 to October 31, 2025
+
+[2025-10-01 08:30] Marcus Webb (Tarn Digital): Meta budget is up 35% from today.
+[2025-10-03 16:12] Priya Sandhu: Snow report is grim. Basically nothing above 1,800 m yet. Posted my conditions notes in the drive.
+[2025-10-06 10:22] Jordan Leclerc: Something is off with Meta. For Oct 1 to 5, Meta reports 163 purchases. Shopify has only 86 orders with Meta UTMs, out of 239 orders total from all channels. Meta can't have driven 163 of those.
+[2025-10-06 10:25] Jordan Leclerc: September looks the same when I compare. Meta reported 846 purchases, Shopify had 1,053 orders total across everything. And our blended CAC barely moved even though Meta CPA halved.
+[2025-10-06 10:31] Priya Sandhu: Oh no. Is Meta double counting?
+[2025-10-06 10:40] Theo Nakamura: Checking the gateway. I think I know what this is.
+[2025-10-06 11:55] Theo Nakamura: Confirmed. The browser pixel sends event_id = order ID. The gateway sends event_id = checkout token. They don't match, so Meta can't dedupe and counts most purchases twice. This started Sept 9. My mistake, I should have matched them. Fix going in Wednesday.
+[2025-10-06 12:10] Priya Sandhu: So September's $50 CPA and 5.4 ROAS weren't real. And we scaled Meta 35% based on it.
+[2025-10-06 12:18] Marcus Webb (Tarn Digital): Yes. Our estimate is September was really about a $90 CPA and 3.0 ROAS. We'll restate it in the October report. Do you want us to pull October budget back to $42K?
+[2025-10-06 12:30] Priya Sandhu: Let's hold for now. Pre-season matters. But I want daily checks against Shopify until the fix is in.
+[2025-10-08 14:45] Theo Nakamura: Dedup fix is live. Test orders show one Purchase each.
+[2025-10-14 11:30] Priya Sandhu: Standup notes are up. Big themes: no snow, hardgoods way down, avy gear up.
+[2025-10-16 17:00] Priya Sandhu: Q3 QBR notes are up.
+[2025-10-20 10:05] Priya Sandhu: Promo calendar updated with final Black Friday plan. Fissile 15% off is the headline.
+[2025-10-28 13:40] Jordan Leclerc: Dana's inventory update: Fissile restock is delayed. Expected mid-December now instead of Oct 30.
+[2025-10-31 16:20] Priya Sandhu: Rough October. Down 18% on last year. Every shop in the corridor says the same thing about snow.

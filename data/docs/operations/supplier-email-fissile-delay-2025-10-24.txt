@@ -1,0 +1,25 @@
+From: Wen Li, Production Manager, Kestrel Board Works
+To: Dana MacLeod <dana@tephra.ca>
+Cc: Rafe Okafor <rafe@tephra.ca>
+Date: October 24, 2025
+Subject: Fissile 2025/26 production run: revised shipping date
+
+Hi Dana,
+
+I'm sorry to share bad news on the Fissile 2025/26 run.
+
+We had a delay on the new core material supplier, and the first two weeks of production were stopped while we requalified the cores. The boards that passed QC are excellent, but we are behind schedule.
+
+Revised timeline:
+- Production complete: November 21
+- Ship date: November 25
+- Expected arrival in Vancouver: around December 8
+- Expected delivery to your Pemberton warehouse: December 12
+
+The original plan was for your order of 180 units to arrive October 30. The full 180 units are still confirmed.
+
+I know this is your busy season. We can air freight 25 units for an extra cost of about $6,000, arriving around November 20. Please let me know by October 29 if you want this.
+
+Best regards,
+Wen Li
+Kestrel Board Works

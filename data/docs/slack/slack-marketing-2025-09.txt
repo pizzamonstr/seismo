@@ -1,0 +1,16 @@
+Slack export: #marketing
+Workspace: Tephra
+Period: September 1, 2025 to September 30, 2025
+
+[2025-09-04 10:00] Marcus Webb (Tarn Digital): August report sent. +9% YoY, Google back to normal after the brand exclusions.
+[2025-09-09 11:30] Theo Nakamura: Conversions API gateway is live. Server events flowing into Events Manager.
+[2025-09-11 09:15] Theo Nakamura: Purchase Event Match Quality is up from 6.1 to 8.4.
+[2025-09-11 09:20] Priya Sandhu: Amazing.
+[2025-09-15 08:10] Sofia Kim (Tarn Digital): 2025/26 season is live! New products are up and fall creative is running for Pylon, Fissile and Matier.
+[2025-09-19 15:22] Sofia Kim (Tarn Digital): Meta is flying. $48 CPA and 5.6 ROAS month to date. Better signal from the gateway seems to be helping a lot.
+[2025-09-19 15:30] Priya Sandhu: That's wild. Best we've ever seen.
+[2025-09-24 10:44] Jordan Leclerc: Shopify revenue is on track for plan, about +12% on last September.
+[2025-09-29 14:05] Marcus Webb (Tarn Digital): Given September's efficiency we recommend scaling Meta 35% in October, from $42K to $56.8K. Pre-season demand is building and we'd like to capture it while ROAS is this strong.
+[2025-09-29 14:20] Priya Sandhu: That's over 20%, so looping in @Ingrid Halvorsen. My vote is yes.
+[2025-09-30 09:05] Ingrid Halvorsen: Go for it.
+[2025-09-30 09:07] Priya Sandhu: Approved. Go ahead from October 1.

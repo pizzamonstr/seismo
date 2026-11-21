@@ -1,0 +1,15 @@
+Slack export: #marketing
+Workspace: Tephra
+Period: July 1, 2025 to July 31, 2025
+
+[2025-07-04 10:15] Marcus Webb (Tarn Digital): June report sent. PMax ROAS 7.8, more than double May. The restructure is working.
+[2025-07-04 10:30] Priya Sandhu: Nice. Revenue's flat on last year though?
+[2025-07-04 10:41] Marcus Webb (Tarn Digital): June is the smallest month of the year, so flat on low spend is a solid result.
+[2025-07-10 09:20] Dana MacLeod: Reminder: warehouse move July 14 and 15. No shipping those days. Orders ship from the 16th.
+[2025-07-16 08:45] Dana MacLeod: We're in! New warehouse is up and running. All backlog orders shipped today.
+[2025-07-21 13:02] Priya Sandhu: Prepping for the QBR. Something doesn't add up. PMax CPA dropped from $68 to $29 and brand search ROAS is 20+, but blended CAC went UP from $46 to $65 vs last June, new customers are down, and revenue is flat. Where are the extra customers?
+[2025-07-21 13:15] Jordan Leclerc: Total Google platform revenue in June was actually lower than May, even though PMax looks amazing.
+[2025-07-21 13:18] Priya Sandhu: So PMax got better and Search got worse by more? That smells like the same sales moving between campaigns.
+[2025-07-24 16:05] Priya Sandhu: QBR notes are up. Tarn is going to pull PMax search term insights to see how much is branded.
+[2025-07-31 12:40] Marcus Webb (Tarn Digital): Search term review done. About 58% of PMax conversions in June and July were on brand terms. PMax was mostly picking up people already searching for Tephra. We'll add brand exclusions and restore brand Search budget on Aug 5. Full write-up in the July report.
+[2025-07-31 12:46] Priya Sandhu: Thanks for digging in. Good catch to fix before fall.

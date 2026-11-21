@@ -1,0 +1,15 @@
+Slack export: #marketing
+Workspace: Tephra
+Period: May 1, 2025 to May 31, 2025
+
+[2025-05-01 09:00] Marcus Webb (Tarn Digital): May budgets are now live, down about 69% from April as planned.
+[2025-05-06 16:20] Jordan Leclerc: Theo pushed the Consent Mode v2 update today. New cookie banner is live.
+[2025-05-07 10:05] Theo Nakamura: Posted an explainer in the drive about what this does to GA4 numbers. TL;DR: GA4 sessions will look lower. Shopify is unaffected.
+[2025-05-12 08:30] Priya Sandhu: End-of-Season Sale is live. 25% off last season's Matier, Rohr, Fissile, Plinth and Bridge, plus base layers. Dana is holding back 150 Fissile boards for September and October.
+[2025-05-20 14:12] Priya Sandhu: Okay I'm slightly panicking. GA4 shows sessions down 25% vs April and revenue is about half of April. Did something break again?
+[2025-05-20 14:25] Jordan Leclerc: I don't think so. Two things going on. 1) The GA4 drop is partly the consent change, see Theo's explainer. 2) May is always about half of April. Spring season is over.
+[2025-05-20 14:27] Jordan Leclerc: Shopify revenue month to date is actually ahead of May last year.
+[2025-05-20 14:31] Priya Sandhu: Phew. Okay. Note to self: check last year before panicking.
+[2025-05-20 14:33] Ingrid Halvorsen: Ha. Same thing happened last May.
+[2025-05-28 11:48] Marcus Webb (Tarn Digital): For June we'd like to restructure Google for summer and push more budget into Performance Max, so it can move sale inventory through the product feed. Proposal coming in the May report.
+[2025-05-28 11:52] Priya Sandhu: Open to it. Send it over.

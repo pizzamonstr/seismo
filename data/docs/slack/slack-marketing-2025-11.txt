@@ -1,0 +1,22 @@
+Slack export: #marketing
+Workspace: Tephra
+Period: November 1, 2025 to November 30, 2025
+
+[2025-11-03 09:00] Sofia Kim (Tarn Digital): "Fissile Splitboard: Prospecting" is live for the pre-Black Friday push.
+[2025-11-05 10:30] Marcus Webb (Tarn Digital): October report sent. It includes the September restatement and the low-snow impact.
+[2025-11-12 15:48] Jordan Leclerc: Fissile just sold out. All sizes.
+[2025-11-12 15:50] Jordan Leclerc: (posting here since Dana's alert only went to inventory-alerts)
+[2025-11-12 16:02] Priya Sandhu: Wait, Fissile is sold out? Isn't that our Black Friday headline? When's the restock?
+[2025-11-12 16:10] Jordan Leclerc: Dana says Dec 12 arrival, live around Dec 15.
+[2025-11-12 16:14] Priya Sandhu: Okay. We need to rethink Black Friday. I'll talk to Rafe and Dana tomorrow.
+[2025-11-18 11:15] Priya Sandhu: Standup notes are up. Black Friday plan B: Mackenzie and Matier as the headline offers.
+[2025-11-20 17:22] Sofia Kim (Tarn Digital): Question: Fissile prospecting CPA has jumped and conversion rate fell off a cliff from last week. Anything changed on site?
+[2025-11-21 08:40] Priya Sandhu: Oh no. Fissile has been sold out since Nov 12. Did nobody tell you?
+[2025-11-21 08:44] Marcus Webb (Tarn Digital): We didn't know. Pausing it now. It spent $8,400 since the 12th, all sending people to a sold-out page.
+[2025-11-21 08:50] Priya Sandhu: That's on us. I said I'd tell you and I didn't. Can we get you on the inventory alerts list?
+[2025-11-21 09:05] Dana MacLeod: Adding marketing@ and Tarn to inventory-alerts now. Sorry all.
+[2025-11-24 07:30] Priya Sandhu: SNOW. Big storm cycle starting today. Finally.
+[2025-11-24 09:12] Sofia Kim (Tarn Digital): Black Friday creative switched to Mackenzie and Matier.
+[2025-11-26 16:40] Jordan Leclerc: Traffic is up 70% on last week. Storm plus Black Friday early access.
+[2025-11-28 06:00] Priya Sandhu: Black Friday is live!
+[2025-11-30 20:15] Jordan Leclerc: Black Friday weekend revenue is up 9% on last year. Not bad without our hero product.
