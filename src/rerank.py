@@ -1,4 +1,4 @@
-"""Score retrieved chunks with a chat model, Fin-style."""
+"""Score retrieved chunks with a chat model."""
 
 import json
 
@@ -16,9 +16,18 @@ Score how useful each passage is for answering the question:
 1 = loosely related
 0 = not useful
 
-Pay close attention to exact channels, metrics, products, \
+Rules:
+- Pay close attention to exact channels, metrics, products, \
 people and time periods. A passage about the wrong month or \
 the wrong channel is not useful, even if the topic matches.
+- Prefer passages that directly state what was asked, such as \
+a name, date or number, over passages that only describe the \
+topic. For "who" or "when" questions, messages and meeting \
+notes where people report what happened are often the answer.
+- For full-year or annual questions, prefer passages that state \
+full-year or year-to-date totals over single-month figures. \
+Single-month figures are supporting context, so score them 2 \
+at most for a full-year question.
 
 Reply with JSON only, in this shape:
 {"scores": [{"id": "P1", "score": 3}, {"id": "P2", "score": 0}]}

@@ -13,10 +13,11 @@ from src.embed import (
     get_collection,
 )
 from src.rerank import rerank
+from src.rewrite import rewrite_question
 
 
 TOP_K = 5
-CANDIDATES = 20
+CANDIDATES = 40
 MAX_SOURCES_PER_SECTION = 2
 SEATS_PER_MONTH = 2
 MONTH_CANDIDATES = 6
@@ -26,7 +27,7 @@ RERANK_MIN_SCORE = 2
 DEFAULT_YEARS = ["2025", "2024"]
 
 STRONG_SCORE = 0.50
-POTENTIAL_SCORE = 0.35
+POTENTIAL_SCORE = 0.32
 WEAK_SCORE = 0.25
 THRESHOLD = POTENTIAL_SCORE
 
@@ -251,13 +252,23 @@ def pick_without_rerank(passed, month_count):
     return sorted(picked, key=get_similarity, reverse=True)
 
 
-def pick_after_rerank(passed):
-    """Keep the most useful results, by re-rank score."""
+def pick_after_rerank(passed, month_count):
+    """Keep the most useful results, with variety."""
     ranked = sorted(passed, key=get_rank_key, reverse=True)
+    most_files = max(MAX_SOURCES_PER_SECTION, month_count)
     picked = []
+    section_sources = {}
     for result in ranked:
         if result["rerank_score"] < RERANK_MIN_SCORE:
             break
+        section = result["metadata"]["section"]
+        source = result["metadata"]["source"]
+        sources = section_sources.get(section, [])
+        if source not in sources:
+            if len(sources) >= most_files:
+                continue
+            sources.append(source)
+            section_sources[section] = sources
         picked.append(result)
         if len(picked) == RERANK_KEEP:
             break
@@ -273,19 +284,32 @@ def retrieve(question, openai_client, collection,
     if collection.count() == 0:
         raise RuntimeError("The knowledge base is empty.")
 
-    search_text = build_search_text(question, previous_question)
-    months = find_question_months(question)
-    if len(months) == 0 and search_text != question:
-        months = find_question_months(previous_question)
-
     details = {
-        "search_text": search_text,
-        "months": months,
         "status": "ok",
+        "rewritten": False,
+        "rewrite_error": "",
         "reranked": False,
         "rerank_error": "",
         "rerank_seconds": 0,
     }
+
+    rewrite_start = time.perf_counter()
+    try:
+        search_text = rewrite_question(
+            question, previous_question, openai_client
+        )
+        details["rewritten"] = True
+    except Exception as error:
+        details["rewrite_error"] = str(error)
+        search_text = build_search_text(question, previous_question)
+    details["rewrite_seconds"] = time.perf_counter() - rewrite_start
+
+    months = find_question_months(search_text)
+    if len(months) == 0 and previous_question != "":
+        if not details["rewritten"] and search_text != question:
+            months = find_question_months(previous_question)
+    details["search_text"] = search_text
+    details["months"] = months
 
     embed_start = time.perf_counter()
     embedding = embed_texts(openai_client, [search_text], model)[0]
@@ -295,6 +319,14 @@ def retrieve(question, openai_client, collection,
     pool = build_pool(collection, embedding, months)
     details["search_seconds"] = time.perf_counter() - search_start
     details["pool_size"] = len(pool)
+    details["pool_sources"] = []
+    for result in pool:
+        source = result["metadata"]["source"]
+        if source not in details["pool_sources"]:
+            details["pool_sources"].append(source)
+    details["top_similarity"] = 0
+    if len(pool) > 0:
+        details["top_similarity"] = pool[0]["similarity"]
 
     passed = filter_results(pool)
     details["passed_threshold"] = len(passed)
@@ -305,7 +337,7 @@ def retrieve(question, openai_client, collection,
     rerank_start = time.perf_counter()
     try:
         rerank(search_text, passed, openai_client)
-        results = pick_after_rerank(passed)
+        results = pick_after_rerank(passed, len(months))
         details["reranked"] = True
     except Exception as error:
         details["rerank_error"] = str(error)
@@ -330,6 +362,9 @@ def print_results(question, results, details):
     """Print each result's scores, tier and source."""
     print(f"Question: {question}")
     print(f"Searched for: {details['search_text']}")
+    print(f"Rewritten: {details['rewritten']}")
+    if details["rewrite_error"] != "":
+        print(f"Rewrite error: {details['rewrite_error']}")
     print(f"Months found: {details['months']}")
     print(f"Candidates: {details['pool_size']}")
     print(f"Passed threshold: {details['passed_threshold']}")
@@ -351,6 +386,8 @@ def print_results(question, results, details):
     embed_ms = details["embed_seconds"] * 1000
     search_ms = details["search_seconds"] * 1000
     rerank_ms = details["rerank_seconds"] * 1000
+    rewrite_ms = details["rewrite_seconds"] * 1000
+    print(f"Rewriting: {rewrite_ms:.0f} ms")
     print(f"Question embedding: {embed_ms:.0f} ms")
     print(f"Search: {search_ms:.0f} ms")
     print(f"Re-ranking: {rerank_ms:.0f} ms")
