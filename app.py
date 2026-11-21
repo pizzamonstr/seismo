@@ -1,5 +1,8 @@
 """Seismo: a metric investigation assistant for Tephra."""
 
+from datetime import date
+
+import openai
 import streamlit as st
 from openai import OpenAI
 
@@ -32,11 +35,43 @@ STEP_LABELS = {
     "rerank": "Tracing the fault line...",
     "write": "Writing it up...",
 }
+MAX_QUESTIONS_PER_SESSION = 15
+DAILY_QUESTION_CAP = 300
+SESSION_LIMIT_MESSAGE = (
+    "That's 15 questions for this visit, which is my limit. Thanks "
+    "for digging in with me."
+)
+DAILY_LIMIT_MESSAGE = (
+    "I've answered all the questions I can for today, so I'm taking "
+    "a breather. Please check back tomorrow."
+)
+ERROR_MESSAGES = {
+    "key": "I can't reach my tools right now. That's on my end, "
+           "not yours. Please try again later.",
+    "busy": "Lots of people are asking at once. Give it a few "
+            "seconds and try again?",
+    "connection": "I lost my connection for a moment. Try that "
+                  "again?",
+    "library": "My document library isn't loaded right now. Please "
+               "try again in a few minutes.",
+}
 STARTER_QUESTIONS = [
     "Why did Meta ROAS jump to 5.4 in September 2025?",
     "Did the GA4 consent mode change in May 2025 cause lost sales?",
     "Why was October 2025 revenue down 18% year over year?",
     "What tracking or measurement problems did Tephra have in 2025?",
+]
+MORE_QUESTIONS = STARTER_QUESTIONS + [
+    "Was creative fatigue the reason Meta retargeting performance "
+    "fell in March 2025?",
+    "Why did revenue drop so much in May 2025?",
+    "What decision was made based on the inflated September Meta "
+    "numbers, and what did it cost?",
+    "Why wasn't the Fissile splitboard in the Black Friday 2025 sale?",
+    "Was December 2025 a bad month, since revenue was lower than "
+    "November?",
+    "Why did summer 2025 AOV go up compared with a normal "
+    "off-season?",
 ]
 
 
@@ -48,6 +83,47 @@ def load_resources():
     return openai_client, collection
 
 
+@st.cache_resource
+def daily_counter():
+    """Count questions across all visitors, reset each day."""
+    return {"date": "", "count": 0}
+
+
+def daily_cap_reached():
+    """Check the shared daily count, starting fresh each new day."""
+    counter = daily_counter()
+    today = str(date.today())
+    if counter["date"] != today:
+        counter["date"] = today
+        counter["count"] = 0
+    return counter["count"] >= DAILY_QUESTION_CAP
+
+
+def count_question():
+    """Add one question to this session and to today's total."""
+    st.session_state.questions_asked += 1
+    daily_counter()["count"] += 1
+
+
+def session_limit_reached():
+    """Check whether this visitor has used all their questions."""
+    used = st.session_state.questions_asked
+    return used >= MAX_QUESTIONS_PER_SESSION
+
+
+def friendly_error(error):
+    """Turn a technical error into a message in Seismo's voice."""
+    if isinstance(error, openai.AuthenticationError):
+        return ERROR_MESSAGES["key"]
+    if isinstance(error, openai.RateLimitError):
+        return ERROR_MESSAGES["busy"]
+    if isinstance(error, openai.APIConnectionError):
+        return ERROR_MESSAGES["connection"]
+    if "knowledge base is empty" in str(error):
+        return ERROR_MESSAGES["library"]
+    return ERROR_MESSAGE
+
+
 def start_session():
     """Set up this visitor's chat history."""
     if "messages" not in st.session_state:
@@ -56,6 +132,8 @@ def start_session():
         st.session_state.previous_question = ""
     if "starter" not in st.session_state:
         st.session_state.starter = ""
+    if "questions_asked" not in st.session_state:
+        st.session_state.questions_asked = 0
 
 
 def show_sources(citations):
@@ -93,31 +171,41 @@ def make_reporter(status):
 def answer_in_chat(question, openai_client, collection):
     """Retrieve with status steps, stream the answer, show sources."""
     status = st.status(STEP_LABELS["rewrite"], expanded=False)
-    question, results, details = prepare(
-        question, openai_client, collection,
-        st.session_state.previous_question,
-        report=make_reporter(status),
-    )
+    try:
+        question, results, details = prepare(
+            question, openai_client, collection,
+            st.session_state.previous_question,
+            report=make_reporter(status),
+        )
+        if len(results) == 0:
+            summary = "No matching documents"
+            if details["status"] == "flagged":
+                summary = "Declined"
+            status.update(label=summary, state="complete")
+            text = fallback_text(details)
+            st.markdown(text)
+            return text, [], details, summary
 
-    if len(results) == 0:
-        status.update(label="No matching documents", state="complete")
-        text = fallback_text(details)
+        status.update(label=STEP_LABELS["write"])
+        status.write(STEP_LABELS["write"])
+        search_text = details.get("search_text", question)
+        text = st.write_stream(
+            stream_answer(search_text, results, openai_client)
+        )
+    except Exception as error:
+        print(f"Seismo error: {error}")
+        summary = "Hit a snag"
+        status.update(label=summary, state="error")
+        text = friendly_error(error)
         st.markdown(text)
-        return text, [], details
+        return text, [], {"status": "error"}, summary
 
-    status.update(label=STEP_LABELS["write"])
-    status.write(STEP_LABELS["write"])
-    search_text = details.get("search_text", question)
-    text = st.write_stream(
-        stream_answer(search_text, results, openai_client)
-    )
     checked = details.get("rerank_pool", len(results))
     summary = f"Read {checked} passages, kept {len(results)}"
     status.update(label=summary, state="complete")
-
     citations = find_citations(text, results)
     show_sources(citations)
-    return text, citations, details
+    return text, citations, details, summary
 
 
 def pick_avatar(role):
@@ -134,6 +222,9 @@ def show_history():
     for message in st.session_state.messages:
         role = message["role"]
         with st.chat_message(role, avatar=pick_avatar(role)):
+            summary = message.get("summary", "")
+            if summary != "":
+                st.status(summary, state="complete", expanded=False)
             st.markdown(message["content"])
             show_sources(message.get("citations", []))
 
@@ -153,6 +244,36 @@ def show_starters():
         )
 
 
+def pick_from_dropdown():
+    """Ask the question picked in the dropdown, then reset it."""
+    picked = st.session_state.more_questions
+    if picked is not None:
+        st.session_state.starter = picked
+    st.session_state.more_questions = None
+
+
+def show_more_questions():
+    """Offer a dropdown of example questions not asked yet."""
+    asked = []
+    for message in st.session_state.messages:
+        asked.append(message["content"])
+    options = []
+    for question in MORE_QUESTIONS:
+        if question not in asked:
+            options.append(question)
+    if len(options) == 0:
+        return
+    st.selectbox(
+        "More questions to try",
+        options,
+        index=None,
+        placeholder="Or pick a suggested question",
+        label_visibility="collapsed",
+        key="more_questions",
+        on_change=pick_from_dropdown,
+    )
+
+
 def clear_chat():
     """Start a fresh conversation."""
     st.session_state.messages = []
@@ -163,24 +284,42 @@ def chat_tab(openai_client, collection):
     """The main chat: history, input and new answers."""
     top = st.container()
     conversation = st.container()
-    question = st.chat_input("Ask why a Tephra metric moved")
+
+    limit_text = ""
+    if session_limit_reached():
+        limit_text = SESSION_LIMIT_MESSAGE
+    elif daily_cap_reached():
+        limit_text = DAILY_LIMIT_MESSAGE
+
+    question = st.chat_input(
+        "Ask why a Tephra metric moved",
+        disabled=limit_text != "",
+    )
+    below = st.container()
     if st.session_state.starter != "":
         question = st.session_state.starter
         st.session_state.starter = ""
 
     with conversation:
         show_history()
-        if question:
+        if limit_text != "":
+            with st.chat_message("assistant", avatar=SEISMO_AVATAR):
+                st.markdown(limit_text)
+        elif question:
             ask_seismo(question, openai_client, collection)
         elif len(st.session_state.messages) == 0:
             show_starters()
 
     if len(st.session_state.messages) > 0:
         top.button("Clear chat", on_click=clear_chat)
+        if limit_text == "":
+            with below:
+                show_more_questions()
 
 
 def ask_seismo(question, openai_client, collection):
     """Show a new question and Seismo's answer, and save both."""
+    count_question()
     st.session_state.messages.append(
         {"role": "user", "content": question}
     )
@@ -188,22 +327,18 @@ def ask_seismo(question, openai_client, collection):
         st.markdown(question)
 
     with st.chat_message("assistant", avatar=SEISMO_AVATAR):
-        try:
-            text, citations, details = answer_in_chat(
-                question, openai_client, collection
-            )
-            if details["status"] == "ok":
-                st.session_state.previous_question = (
-                    details["search_text"]
-                )
-        except Exception:
-            text = ERROR_MESSAGE
-            citations = []
-            st.markdown(text)
+        text, citations, details, summary = answer_in_chat(
+            question, openai_client, collection
+        )
+    if details["status"] == "ok":
+        st.session_state.previous_question = details["search_text"]
 
-    st.session_state.messages.append(
-        {"role": "assistant", "content": text, "citations": citations}
-    )
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": text,
+        "citations": citations,
+        "summary": summary,
+    })
 
 
 st.title("Seismo")

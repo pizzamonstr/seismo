@@ -10,6 +10,7 @@ from src.embed import EMBEDDING_MODEL, get_api_key, get_collection
 from src.retrieve import retrieve
 
 CHAT_MODEL = "gpt-6.1-terra"
+MODERATION_MODEL = "omni-moderation-latest"
 CHAT_EFFORT = "low"
 MAX_QUESTION_CHARS = 500
 CITATION_PATTERN = r"\[S(\d+)\]"
@@ -95,6 +96,11 @@ EMPTY_MESSAGE = (
     "Tephra's numbers."
 )
 
+FLAGGED_MESSAGE = (
+    "I can't help with that one. I'm here for questions about "
+    "Tephra's marketing, sales and the numbers behind them."
+)
+
 ERROR_MESSAGE = (
     "I found the right docs, but hit a snag writing the answer. "
     "Give it a moment and try again?"
@@ -175,9 +181,23 @@ def build_not_found_text(closest):
 
 def build_fallback_text(details):
     """Pick the message to show when there is no evidence."""
+    if details["status"] == "flagged":
+        return FLAGGED_MESSAGE
     if details["status"] == "no_match":
         return NO_MATCH_MESSAGE
     return build_not_found_text(details["closest"])
+
+
+def is_flagged(question, openai_client):
+    """Check a question with OpenAI's free moderation model."""
+    try:
+        response = openai_client.moderations.create(
+            model=MODERATION_MODEL,
+            input=question,
+        )
+    except Exception:
+        return False
+    return response.results[0].flagged
 
 
 def prepare(question, openai_client, collection,
@@ -189,6 +209,9 @@ def prepare(question, openai_client, collection,
         return question, [], details
     if len(question) > MAX_QUESTION_CHARS:
         details = {"status": "too_long"}
+        return question, [], details
+    if is_flagged(question, openai_client):
+        details = {"status": "flagged"}
         return question, [], details
     results, details = retrieve(
         question, openai_client, collection,
