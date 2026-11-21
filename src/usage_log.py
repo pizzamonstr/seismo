@@ -8,6 +8,7 @@ from pathlib import Path
 
 LOG_FOLDER = Path(os.environ.get("SEISMO_LOG_FOLDER", "logs"))
 LOG_FILE = LOG_FOLDER / "usage.jsonl"
+SAMPLE_FILE = Path("data/sample_usage.jsonl")
 
 
 def new_visit_id():
@@ -15,17 +16,18 @@ def new_visit_id():
     return uuid.uuid4().hex[:12]
 
 
-def write_event(event):
-    """Add one event to the end of the log, one JSON line each."""
-    LOG_FOLDER.mkdir(parents=True, exist_ok=True)
+def write_event(event, path=LOG_FILE):
+    """Add one event to the end of a log, one JSON line each."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     event["time"] = datetime.now(timezone.utc).isoformat(
         timespec="seconds"
     )
-    with open(LOG_FILE, "a", encoding="utf-8") as file:
+    with open(path, "a", encoding="utf-8") as file:
         file.write(json.dumps(event) + "\n")
 
 
-def log_question(visit_id, question, details, citations):
+def log_question(visit_id, question, details, citations,
+                 path=LOG_FILE):
     """Save what was asked and how Seismo handled it."""
     cited_sources = []
     for citation in citations:
@@ -50,7 +52,7 @@ def log_question(visit_id, question, details, citations):
         "write_seconds": round(details.get("write_seconds", 0), 2),
         "total_seconds": round(details.get("total_seconds", 0), 2),
     }
-    write_event(event)
+    write_event(event, path)
 
 
 def log_found_via(visit_id, choice):
@@ -63,12 +65,12 @@ def log_found_via(visit_id, choice):
     write_event(event)
 
 
-def read_events():
-    """Read every event in the log, skipping any broken lines."""
-    if not LOG_FILE.exists():
+def read_events(path=LOG_FILE):
+    """Read every event in a log, skipping any broken lines."""
+    if not path.exists():
         return []
     events = []
-    with open(LOG_FILE, encoding="utf-8") as file:
+    with open(path, encoding="utf-8") as file:
         for line in file:
             line = line.strip()
             if line == "":

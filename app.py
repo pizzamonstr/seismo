@@ -3,10 +3,19 @@
 import time
 from datetime import date
 
+import altair as alt
 import openai
 import streamlit as st
 from openai import OpenAI
 
+from src.analytics import (
+    average_step_times,
+    count_cited_sources,
+    count_outcomes,
+    load_found_via,
+    load_questions,
+    summarize,
+)
 from src.embed import get_api_key, get_collection
 from src.generate import (
     EMPTY_MESSAGE,
@@ -431,6 +440,67 @@ def ask_seismo(question, openai_client, collection):
     })
 
 
+def bar_chart(data, value, label):
+    """Draw a simple horizontal bar chart, longest bar first."""
+    chart = alt.Chart(data).mark_bar().encode(
+        x=alt.X(f"{value}:Q", title=value),
+        y=alt.Y(
+            f"{label}:N", sort="-x", title=None,
+            axis=alt.Axis(labelLimit=320),
+        ),
+        tooltip=[label, value],
+    )
+    st.altair_chart(chart, width="stretch")
+
+
+def show_headline(questions):
+    """Show the four headline numbers."""
+    summary = summarize(questions)
+    columns = st.columns(4)
+    columns[0].metric("Questions", summary["questions"])
+    columns[1].metric("Visits", summary["visits"])
+    columns[2].metric("Answered", f"{summary['answered_share']:.0%}")
+    columns[3].metric(
+        "Average answer time", f"{summary['average_seconds']:.1f} s"
+    )
+
+
+def analytics_tab():
+    """Public summaries of how Seismo is being used."""
+    include_sample = st.toggle(
+        "Include sample questions",
+        value=True,
+        help="The 54 test questions from Seismo's evaluation, asked "
+             "once before launch.",
+    )
+    questions = load_questions(include_sample)
+    if len(questions) == 0:
+        st.info("No questions yet. Ask Seismo something in Chat.")
+        return
+
+    show_headline(questions)
+
+    st.subheader("How Questions Were Handled")
+    bar_chart(count_outcomes(questions), "Questions", "Outcome")
+
+    st.subheader("Most-Cited Documents")
+    cited = count_cited_sources(questions)
+    if len(cited) > 0:
+        bar_chart(cited, "Times cited", "Document")
+
+    st.subheader("Where the Time Goes")
+    st.caption("Average seconds per step, for answered questions.")
+    bar_chart(average_step_times(questions), "Seconds", "Step")
+
+    st.subheader("Where Visitors Found Seismo")
+    found_via = load_found_via()
+    if len(found_via) == 0:
+        st.caption("No answers yet. This only counts real visitors.")
+    else:
+        st.caption("Real visitors only.")
+        bar_chart(found_via, "Visitors", "Where")
+
+
 st.html(STYLES)
 start_session()
 show_found_via()
@@ -450,4 +520,4 @@ with chat:
 with how_it_works:
     st.write("Coming soon.")
 with analytics:
-    st.write("Coming soon.")
+    analytics_tab()
