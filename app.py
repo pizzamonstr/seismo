@@ -25,6 +25,19 @@ GREETING = (
     "and I show you exactly where each answer came from. What "
     "would you like to look into?"
 )
+STEP_LABELS = {
+    "rewrite": "Listening for the tremor...",
+    "search": "Reading the seismographs: reports, change logs "
+              "and Slack...",
+    "rerank": "Tracing the fault line...",
+    "write": "Writing it up...",
+}
+STARTER_QUESTIONS = [
+    "Why did Meta ROAS jump to 5.4 in September 2025?",
+    "Did the GA4 consent mode change in May 2025 cause lost sales?",
+    "Why was October 2025 revenue down 18% year over year?",
+    "What tracking or measurement problems did Tephra have in 2025?",
+]
 
 
 @st.cache_resource
@@ -41,6 +54,8 @@ def start_session():
         st.session_state.messages = []
     if "previous_question" not in st.session_state:
         st.session_state.previous_question = ""
+    if "starter" not in st.session_state:
+        st.session_state.starter = ""
 
 
 def show_sources(citations):
@@ -66,23 +81,40 @@ def fallback_text(details):
     return build_fallback_text(details)
 
 
+def make_reporter(status):
+    """Build a function that shows each retrieval step."""
+    def report(step):
+        label = STEP_LABELS[step]
+        status.update(label=label)
+        status.write(label)
+    return report
+
+
 def answer_in_chat(question, openai_client, collection):
-    """Retrieve, stream the answer and show its sources."""
-    with st.spinner("Searching Tephra's documents..."):
-        question, results, details = prepare(
-            question, openai_client, collection,
-            st.session_state.previous_question,
-        )
+    """Retrieve with status steps, stream the answer, show sources."""
+    status = st.status(STEP_LABELS["rewrite"], expanded=False)
+    question, results, details = prepare(
+        question, openai_client, collection,
+        st.session_state.previous_question,
+        report=make_reporter(status),
+    )
 
     if len(results) == 0:
+        status.update(label="No matching documents", state="complete")
         text = fallback_text(details)
         st.markdown(text)
         return text, [], details
 
+    status.update(label=STEP_LABELS["write"])
+    status.write(STEP_LABELS["write"])
     search_text = details.get("search_text", question)
     text = st.write_stream(
         stream_answer(search_text, results, openai_client)
     )
+    checked = details.get("rerank_pool", len(results))
+    summary = f"Read {checked} passages, kept {len(results)}"
+    status.update(label=summary, state="complete")
+
     citations = find_citations(text, results)
     show_sources(citations)
     return text, citations, details
@@ -106,6 +138,21 @@ def show_history():
             show_sources(message.get("citations", []))
 
 
+def pick_starter(question):
+    """Remember which starter question was clicked."""
+    st.session_state.starter = question
+
+
+def show_starters():
+    """Offer example questions while the chat is empty."""
+    st.caption("Not sure where to start? Try one of these:")
+    for question in STARTER_QUESTIONS:
+        st.button(
+            question, on_click=pick_starter, args=[question],
+            key=f"starter-{question}",
+        )
+
+
 def clear_chat():
     """Start a fresh conversation."""
     st.session_state.messages = []
@@ -117,11 +164,16 @@ def chat_tab(openai_client, collection):
     top = st.container()
     conversation = st.container()
     question = st.chat_input("Ask why a Tephra metric moved")
+    if st.session_state.starter != "":
+        question = st.session_state.starter
+        st.session_state.starter = ""
 
     with conversation:
         show_history()
         if question:
             ask_seismo(question, openai_client, collection)
+        elif len(st.session_state.messages) == 0:
+            show_starters()
 
     if len(st.session_state.messages) > 0:
         top.button("Clear chat", on_click=clear_chat)

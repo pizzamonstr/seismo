@@ -473,8 +473,15 @@ def pick_after_rerank(passed, month_count):
     return picked
 
 
+def tell(report, step):
+    """Report a step to the app, if it asked to hear about steps."""
+    if report is not None:
+        report(step)
+
+
 def retrieve(question, openai_client, collection,
-             previous_question="", model=EMBEDDING_MODEL):
+             previous_question="", model=EMBEDDING_MODEL,
+             report=None):
     """Find the chunks that best answer a question."""
     question = question.strip()
     if question == "":
@@ -492,6 +499,7 @@ def retrieve(question, openai_client, collection,
         "closest": [],
     }
 
+    tell(report, "rewrite")
     rewrite_start = time.perf_counter()
     try:
         search_text = rewrite_question(
@@ -503,6 +511,7 @@ def retrieve(question, openai_client, collection,
         search_text = build_search_text(question, previous_question)
     details["rewrite_seconds"] = time.perf_counter() - rewrite_start
 
+    tell(report, "search")
     pool, plan = gather_pool(
         search_text, openai_client, collection, model
     )
@@ -537,6 +546,7 @@ def retrieve(question, openai_client, collection,
     candidates = filter_results(pool, WEAK_SCORE)
     details["rerank_pool"] = len(candidates)
 
+    tell(report, "rerank")
     rerank_start = time.perf_counter()
     try:
         rerank(search_text, candidates, openai_client)

@@ -181,7 +181,7 @@ def build_fallback_text(details):
 
 
 def prepare(question, openai_client, collection,
-            previous_question=""):
+            previous_question="", report=None):
     """Check the question and retrieve chunks for it."""
     question = question.strip()
     if len(question) == 0:
@@ -193,6 +193,7 @@ def prepare(question, openai_client, collection,
     results, details = retrieve(
         question, openai_client, collection,
         previous_question=previous_question,
+        report=report,
     )
     return question, results, details
 
