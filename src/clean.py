@@ -5,6 +5,117 @@ import re
 from src.load import load_documents
 
 
+WRAPPED_LINE_LENGTH = 70
+POSITION_TOLERANCE = 2
+
+
+def fix_bullets(text):
+    """Swap bullet symbols at line starts for a dash."""
+    pattern = r"^[ \t]*[^\w\s\x21-\x7e][ \t]+"
+    return re.sub(pattern, "- ", text, flags=re.MULTILINE)
+
+
+def find_segments(line):
+    """Split a line into pieces, with start positions."""
+    segments = []
+    for match in re.finditer(r"\S+(?: \S+)*", line):
+        segments.append((match.start(), match.group()))
+    return segments
+
+
+def find_column(start, column_starts):
+    """Find which column a piece starts in."""
+    column = 0
+    for index in range(len(column_starts)):
+        if start + POSITION_TOLERANCE >= column_starts[index]:
+            column = index
+    return column
+
+
+def fits_column(start, text, column, column_starts):
+    """Check that a piece stays inside its column."""
+    if column == len(column_starts) - 1:
+        return True
+    end = start + len(text)
+    next_start = column_starts[column + 1]
+    return end <= next_start + POSITION_TOLERANCE
+
+
+def is_continuation(segments, column_starts):
+    """Check if a line holds only wrapped cells."""
+    if len(column_starts) == 0:
+        return False
+    for start, text in segments:
+        column = find_column(start, column_starts)
+        fits = fits_column(start, text, column, column_starts)
+        if not fits:
+            return False
+    first_column = find_column(segments[0][0], column_starts)
+    if first_column == 0 and len(segments) >= 2:
+        return False
+    return True
+
+
+def add_to_row(row, segments, column_starts):
+    """Add wrapped pieces to the right cells."""
+    for start, text in segments:
+        column = find_column(start, column_starts)
+        while len(row) <= column:
+            row.append("")
+        if row[column] == "":
+            row[column] = text
+        else:
+            row[column] = row[column] + " " + text
+
+
+def rebuild_tables(text):
+    """Rebuild table rows, with wrapped cells put back."""
+    lines = text.split("\n")
+    output_lines = []
+    column_starts = []
+    row = []
+    can_continue = False
+
+    for line in lines:
+        segments = find_segments(line)
+
+        if len(segments) == 0:
+            if len(row) > 0:
+                output_lines.append(" | ".join(row))
+                row = []
+            output_lines.append("")
+            can_continue = False
+            continue
+
+        continues = can_continue and is_continuation(
+            segments, column_starts
+        )
+        if continues:
+            add_to_row(row, segments, column_starts)
+            continue
+
+        if len(row) > 0:
+            output_lines.append(" | ".join(row))
+            row = []
+
+        if len(segments) >= 2:
+            if len(column_starts) == 0:
+                for start, cell in segments:
+                    column_starts.append(start)
+            for start, cell in segments:
+                row.append(cell)
+            can_continue = True
+        else:
+            output_lines.append(line)
+            column_starts = []
+            can_continue = False
+
+    if len(row) > 0:
+        output_lines.append(" | ".join(row))
+
+    return "\n".join(output_lines)
+
+
 def strip_lines(text):
     """Remove spaces at both ends of each line."""
     lines = text.split("\n")
@@ -14,25 +125,24 @@ def strip_lines(text):
     return "\n".join(stripped_lines)
 
 
-def fix_bullets(text):
-    """Swap font bullet symbols for a dash."""
-    return re.sub(r"[\ue000-\uf8ff]\s*", "- ", text)
-
-
-def mark_table_columns(text):
-    """Swap runs of 2+ spaces for ' | '."""
-    return re.sub(r" {2,}", " | ", text)
+def is_table_row(line):
+    """Check if a line is a table row."""
+    return " | " in line
 
 
 def should_join(previous, line):
     """Decide if a line continues the one before."""
     if previous == "" or line == "":
         return False
-    if " | " in previous or " | " in line:
+    if is_table_row(previous) or is_table_row(line):
+        return False
+    if line.startswith("- "):
         return False
     if previous.endswith((".", "!", "?", ":", ";")):
         return False
-    return line[0].islower()
+    if line[0].islower():
+        return True
+    return len(previous) >= WRAPPED_LINE_LENGTH
 
 
 def join_broken_lines(text):
@@ -64,18 +174,18 @@ def remove_blank_lines_in_tables(text):
         if line == "" and is_middle:
             before = lines[index - 1]
             after = lines[index + 1]
-            if " | " in before and " | " in after:
+            if is_table_row(before) and is_table_row(after):
                 continue
         kept_lines.append(line)
     return "\n".join(kept_lines)
-            
+
 
 def clean_pdf_text(text):
     """Run every cleaning step a PDF page needs."""
     text = text.replace("\r\n", "\n")
-    text = strip_lines(text)
     text = fix_bullets(text)
-    text = mark_table_columns(text)
+    text = rebuild_tables(text)
+    text = strip_lines(text)
     text = join_broken_lines(text)
     text = remove_extra_blank_lines(text)
     text = remove_blank_lines_in_tables(text)
