@@ -57,6 +57,13 @@ ERROR_MESSAGES = {
     "library": "My document library isn't loaded right now. Please "
                "try again in a few minutes.",
 }
+STYLES = """
+<style>
+div[data-testid="stSelectbox"] input[role="combobox"] {
+    padding-left: 1.5rem;
+}
+</style>
+"""
 FOUND_VIA_OPTIONS = [
     "LinkedIn", "Portfolio site", "UBC class", "Somewhere else",
 ]
@@ -171,7 +178,7 @@ def make_reporter(status):
     def report(step):
         label = STEP_LABELS[step]
         status.update(label=label)
-        status.write(label)
+        status.caption(label)
     return report
 
 
@@ -219,7 +226,7 @@ def answer_in_chat(question, openai_client, collection):
             return text, [], details, summary, []
 
         status.update(label=STEP_LABELS["write"])
-        status.write(STEP_LABELS["write"])
+        status.caption(STEP_LABELS["write"])
         write_start = time.perf_counter()
         search_text = details.get("search_text", question)
         mapping = {}
@@ -297,8 +304,9 @@ def pick_starter(question):
 def show_starters():
     """Offer example questions while the chat is empty."""
     st.caption("Not sure where to start? Try one of these:")
+    row = st.container(horizontal=True, wrap=True)
     for question in STARTER_QUESTIONS:
-        st.button(
+        row.button(
             question, on_click=pick_starter, args=[question],
             key=f"starter-{question}",
         )
@@ -343,7 +351,7 @@ def clear_chat():
 def chat_tab(openai_client, collection):
     """The main chat: history, input and new answers."""
     top = st.container()
-    conversation = st.container()
+    conversation = st.container(border=True, gap="medium")
 
     limit_text = ""
     if session_limit_reached():
@@ -368,7 +376,6 @@ def chat_tab(openai_client, collection):
         elif question:
             ask_seismo(question, openai_client, collection)
         elif len(st.session_state.messages) == 0:
-            show_found_via()
             show_starters()
 
     if len(st.session_state.messages) > 0:
@@ -403,13 +410,15 @@ def ask_seismo(question, openai_client, collection):
     })
 
 
+st.html(STYLES)
+start_session()
+show_found_via()
 st.title("Seismo")
 st.caption(
     "A portfolio project by Kaiya Sjoholm. Tephra is a fictional "
     "brand, and all of its data is made up."
 )
 
-start_session()
 openai_client, collection = load_resources()
 
 chat, how_it_works, analytics = st.tabs(
