@@ -13,6 +13,7 @@ from src.embed import (
     get_collection,
 )
 from src.load import DOCS_FOLDER
+from src.metric_map import build_cause_text
 from src.rerank import rerank
 from src.rewrite import rewrite_question
 
@@ -27,6 +28,8 @@ SEATS_PER_MONTH = 2
 MONTH_CANDIDATES = 8
 MONTH_SEATS_PER_FOLDER = 2
 FOLDER_CANDIDATES = 2
+CAUSE_CANDIDATES = 10
+CAUSE_MONTH_CANDIDATES = 4
 MAX_MONTHS = 6
 LOOK_BACK_LIMIT = 3
 RERANK_KEEP = 6
@@ -312,34 +315,39 @@ def add_to_pool(pool, tracker, result):
     tracker["names"][metadata["section"]] = sources
 
 
-def build_pool(collection, embedding, months):
-    """Gather varied candidates: overall, per month, per folder."""
-    pool = []
-    tracker = make_tracker()
-
+def add_general_seats(pool, tracker, collection, embedding, seats):
+    """Add the closest chunks from the whole collection."""
     found = search(collection, embedding, SEARCH_DEPTH)
+    added = 0
     for result in build_results(found, False):
-        if len(pool) == CANDIDATES:
+        if added == seats:
             break
         if fits_pool(result, tracker, True):
             add_to_pool(pool, tracker, result)
+            added = added + 1
 
-    for labels in months:
-        where = {"month": {"$in": labels}}
-        found = search(collection, embedding, SEARCH_DEPTH, where)
-        tracker["folders"] = {}
-        added = 0
-        for result in build_results(found, True):
-            if added == MONTH_CANDIDATES:
-                break
-            limit = MONTH_SEATS_PER_FOLDER
-            if fits_pool(result, tracker, False, limit):
-                add_to_pool(pool, tracker, result)
-                folder = result["metadata"]["folder"]
-                used = tracker["folders"].get(folder, 0)
-                tracker["folders"][folder] = used + 1
-                added = added + 1
 
+def add_month_seats(pool, tracker, collection, embedding, labels,
+                    seats):
+    """Add the closest chunks from one month, spread by folder."""
+    where = {"month": {"$in": labels}}
+    found = search(collection, embedding, SEARCH_DEPTH, where)
+    tracker["folders"] = {}
+    added = 0
+    for result in build_results(found, True):
+        if added == seats:
+            break
+        limit = MONTH_SEATS_PER_FOLDER
+        if fits_pool(result, tracker, False, limit):
+            add_to_pool(pool, tracker, result)
+            folder = result["metadata"]["folder"]
+            used = tracker["folders"].get(folder, 0)
+            tracker["folders"][folder] = used + 1
+            added = added + 1
+
+
+def add_folder_seats(pool, tracker, collection, embedding):
+    """Add the closest chunks from each document folder."""
     for folder in find_folders():
         where = {"folder": folder}
         depth = FOLDER_CANDIDATES * 5
@@ -352,7 +360,62 @@ def build_pool(collection, embedding, months):
                 add_to_pool(pool, tracker, result)
                 added = added + 1
 
+
+def build_pool(collection, embeddings, months):
+    """Gather varied candidates: overall, per month, per folder."""
+    pool = []
+    tracker = make_tracker()
+
+    main = embeddings[0]
+    add_general_seats(pool, tracker, collection, main, CANDIDATES)
+    for labels in months:
+        add_month_seats(
+            pool, tracker, collection, main, labels,
+            MONTH_CANDIDATES,
+        )
+
+    add_folder_seats(pool, tracker, collection, main)
+    for result in pool:
+        result["cause_match"] = False
+
+    for cause in embeddings[1:]:
+        start = len(pool)
+        add_general_seats(
+            pool, tracker, collection, cause, CAUSE_CANDIDATES
+        )
+        for labels in months:
+            add_month_seats(
+                pool, tracker, collection, cause, labels,
+                CAUSE_MONTH_CANDIDATES,
+            )
+        for result in pool[start:]:
+            result["cause_match"] = True
+
     return sorted(pool, key=get_similarity, reverse=True)
+
+
+def gather_pool(search_text, openai_client, collection,
+                model=EMBEDDING_MODEL):
+    """Plan the searches for a question and build the pool."""
+    months = find_question_months(search_text)
+    search_texts = [search_text]
+    if is_cause_question(search_text):
+        months = add_look_back(months)
+        search_texts.append(build_cause_text(search_text))
+
+    embed_start = time.perf_counter()
+    embeddings = embed_texts(openai_client, search_texts, model)
+    embed_seconds = time.perf_counter() - embed_start
+
+    search_start = time.perf_counter()
+    pool = build_pool(collection, embeddings, months)
+    plan = {
+        "months": months,
+        "search_texts": search_texts,
+        "embed_seconds": embed_seconds,
+        "search_seconds": time.perf_counter() - search_start,
+    }
+    return pool, plan
 
 
 def pick_without_rerank(passed, month_count):
@@ -440,22 +503,17 @@ def retrieve(question, openai_client, collection,
         search_text = build_search_text(question, previous_question)
     details["rewrite_seconds"] = time.perf_counter() - rewrite_start
 
-    months = find_question_months(search_text)
-    if len(months) == 0 and previous_question != "":
-        if not details["rewritten"] and search_text != question:
-            months = find_question_months(previous_question)
-    if is_cause_question(search_text):
-        months = add_look_back(months)
+    pool, plan = gather_pool(
+        search_text, openai_client, collection, model
+    )
+    months = plan["months"]
     details["search_text"] = search_text
+    details["cause_text"] = ""
+    if len(plan["search_texts"]) > 1:
+        details["cause_text"] = plan["search_texts"][1]
     details["months"] = months
-
-    embed_start = time.perf_counter()
-    embedding = embed_texts(openai_client, [search_text], model)[0]
-    details["embed_seconds"] = time.perf_counter() - embed_start
-
-    search_start = time.perf_counter()
-    pool = build_pool(collection, embedding, months)
-    details["search_seconds"] = time.perf_counter() - search_start
+    details["embed_seconds"] = plan["embed_seconds"]
+    details["search_seconds"] = plan["search_seconds"]
     details["pool_size"] = len(pool)
     details["pool_sources"] = []
     for result in pool:
@@ -466,7 +524,11 @@ def retrieve(question, openai_client, collection,
     if len(pool) > 0:
         details["top_similarity"] = pool[0]["similarity"]
 
-    passed = filter_results(pool)
+    main_pool = []
+    for result in pool:
+        if not result["cause_match"]:
+            main_pool.append(result)
+    passed = filter_results(main_pool)
     details["passed_threshold"] = len(passed)
     if len(passed) == 0:
         details["status"] = "no_match"

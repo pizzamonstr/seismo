@@ -2,6 +2,8 @@
 
 import json
 
+from src.metric_map import GLOSSARY
+
 RERANK_MODEL = "gpt-6-luna"
 RERANK_EFFORT = "none"
 MAX_PASSAGE_CHARS = 1700
@@ -40,10 +42,15 @@ right time period, because causes come before their effects.
 - Messages, meeting notes or change log entries where someone \
 confirms or fixes the cause of a problem are key evidence, so \
 score them 3.
+- Plans for a future year are written in the year before, in \
+places like year-end reviews and postmortems. Do not treat them \
+as the wrong time period.
 
 Reply with JSON only, in this shape:
 {"scores": [{"id": "P1", "score": 3}, {"id": "P2", "score": 0}]}
-Score every passage."""
+Score every passage.
+
+""" + GLOSSARY
 
 
 def build_passages(results):

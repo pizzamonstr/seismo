@@ -1,5 +1,7 @@
 """Rewrite a question into a clear search query."""
 
+from src.metric_map import GLOSSARY
+
 REWRITE_MODEL = "gpt-6-luna"
 REWRITE_EFFORT = "none"
 
@@ -19,7 +21,11 @@ Plinth, Bridge, Cerise, Spearhead, Wedge, Portage, Signal Hill, \
 Nairn, Pebble, Mackenzie, Owl, Icecap, Joffre, Keyhole, \
 Meadows, Spud Valley, One Mile, Birkenhead, Birken, Blowdown, \
 Pioneer and Anderson.
-- Reply with the rewritten question only."""
+- Spell out abbreviations once using the terms below, like \
+"CAC (customer acquisition cost)".
+- Reply with the rewritten question only.
+
+""" + GLOSSARY
 
 
 def rewrite_question(question, previous_question, openai_client):
