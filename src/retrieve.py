@@ -12,16 +12,23 @@ from src.embed import (
     get_api_key,
     get_collection,
 )
+from src.load import DOCS_FOLDER
 from src.rerank import rerank
 from src.rewrite import rewrite_question
 
 
 TOP_K = 5
-CANDIDATES = 40
+CANDIDATES = 30
+SEARCH_DEPTH = 150
 MAX_SOURCES_PER_SECTION = 2
+MAX_CHUNKS_PER_SECTION = 2
+MAX_FILES_PER_SECTION_NAME = 3
 SEATS_PER_MONTH = 2
-MONTH_CANDIDATES = 6
+MONTH_CANDIDATES = 8
+MONTH_SEATS_PER_FOLDER = 2
+FOLDER_CANDIDATES = 2
 MAX_MONTHS = 6
+LOOK_BACK_LIMIT = 3
 RERANK_KEEP = 6
 RERANK_MIN_SCORE = 2
 DEFAULT_YEARS = ["2025", "2024"]
@@ -75,6 +82,13 @@ FOLLOW_UP_STARTS = (
     "what about", "how about", "and ", "same for", "what if",
 )
 FOLLOW_UP_WORDS = ["it", "that", "this", "they", "those", "them"]
+CAUSE_WORDS = [
+    "why", "cause", "caused", "causing", "reason", "explain",
+    "what happened", "what went wrong", "drop", "dropped", "fell",
+    "decline", "declined", "spike", "spiked", "jump", "jumped",
+    "went up", "went down", "increase", "increased", "decrease",
+    "decreased", "rose", "worse",
+]
 
 
 def classify_score(similarity):
@@ -123,6 +137,40 @@ def find_question_months(question):
             labels.append(f"{year}-{number}")
         months.append(labels)
     return months
+
+
+def is_cause_question(question):
+    """Check whether a question asks why something changed."""
+    lowered = question.lower()
+    for word in CAUSE_WORDS:
+        if re.search(r"\b" + word + r"\b", lowered):
+            return True
+    return False
+
+
+def previous_month(label):
+    """Return the month before a label, like 2025-03 to 2025-02."""
+    year = int(label[:4])
+    month = int(label[5:7]) - 1
+    if month == 0:
+        year = year - 1
+        month = 12
+    return f"{year}-{month:02d}"
+
+
+def add_look_back(months):
+    """Add the month before each named month, for causes."""
+    if len(months) == 0 or len(months) > LOOK_BACK_LIMIT:
+        return months
+    expanded = []
+    for labels in months:
+        before = []
+        for label in labels:
+            before.append(previous_month(label))
+        if before not in months and before not in expanded:
+            expanded.append(before)
+        expanded.append(labels)
+    return expanded
 
 
 def is_follow_up(question):
@@ -212,26 +260,96 @@ def get_rank_key(result):
     return (result["rerank_score"], result["similarity"])
 
 
-def build_pool(collection, embedding, months):
-    """Gather candidates: the top overall, plus each month's."""
-    found = search(collection, embedding, CANDIDATES)
-    pool = build_results(found, False)
+def find_folders():
+    """List the document folders, like slack and tracking."""
+    folders = []
+    for path in sorted(DOCS_FOLDER.iterdir()):
+        if path.is_dir():
+            folders.append(path.name)
+    return folders
 
-    seen_ids = []
-    for result in pool:
-        seen_ids.append(result["chunk_id"])
+
+def make_tracker():
+    """Start an empty record of what is already in the pool."""
+    return {"ids": [], "sections": {}, "names": {}, "folders": {}}
+
+
+def fits_pool(result, tracker, limit_names, folder_limit=None):
+    """Check a result against the pool's variety limits."""
+    metadata = result["metadata"]
+    if result["chunk_id"] in tracker["ids"]:
+        return False
+
+    key = metadata["source"] + " > " + metadata["section"]
+    if tracker["sections"].get(key, 0) >= MAX_CHUNKS_PER_SECTION:
+        return False
+
+    if limit_names:
+        sources = tracker["names"].get(metadata["section"], [])
+        if metadata["source"] not in sources:
+            if len(sources) >= MAX_FILES_PER_SECTION_NAME:
+                return False
+
+    if folder_limit is not None:
+        used = tracker["folders"].get(metadata["folder"], 0)
+        if used >= folder_limit:
+            return False
+    return True
+
+
+def add_to_pool(pool, tracker, result):
+    """Add a result to the pool and update the tracker."""
+    metadata = result["metadata"]
+    pool.append(result)
+    tracker["ids"].append(result["chunk_id"])
+
+    key = metadata["source"] + " > " + metadata["section"]
+    tracker["sections"][key] = tracker["sections"].get(key, 0) + 1
+
+    sources = tracker["names"].get(metadata["section"], [])
+    if metadata["source"] not in sources:
+        sources.append(metadata["source"])
+    tracker["names"][metadata["section"]] = sources
+
+
+def build_pool(collection, embedding, months):
+    """Gather varied candidates: overall, per month, per folder."""
+    pool = []
+    tracker = make_tracker()
+
+    found = search(collection, embedding, SEARCH_DEPTH)
+    for result in build_results(found, False):
+        if len(pool) == CANDIDATES:
+            break
+        if fits_pool(result, tracker, True):
+            add_to_pool(pool, tracker, result)
 
     for labels in months:
         where = {"month": {"$in": labels}}
-        count = MONTH_CANDIDATES + len(seen_ids)
-        month_found = search(collection, embedding, count, where)
+        found = search(collection, embedding, SEARCH_DEPTH, where)
+        tracker["folders"] = {}
         added = 0
-        for result in build_results(month_found, True):
+        for result in build_results(found, True):
             if added == MONTH_CANDIDATES:
                 break
-            if result["chunk_id"] not in seen_ids:
-                pool.append(result)
-                seen_ids.append(result["chunk_id"])
+            limit = MONTH_SEATS_PER_FOLDER
+            if fits_pool(result, tracker, False, limit):
+                add_to_pool(pool, tracker, result)
+                folder = result["metadata"]["folder"]
+                used = tracker["folders"].get(folder, 0)
+                tracker["folders"][folder] = used + 1
+                added = added + 1
+
+    for folder in find_folders():
+        where = {"folder": folder}
+        depth = FOLDER_CANDIDATES * 5
+        found = search(collection, embedding, depth, where)
+        added = 0
+        for result in build_results(found, False):
+            if added == FOLDER_CANDIDATES:
+                break
+            if fits_pool(result, tracker, True):
+                add_to_pool(pool, tracker, result)
                 added = added + 1
 
     return sorted(pool, key=get_similarity, reverse=True)
@@ -252,6 +370,21 @@ def pick_without_rerank(passed, month_count):
     return sorted(picked, key=get_similarity, reverse=True)
 
 
+def get_body(result):
+    """Return a chunk's text without its title lines."""
+    return result["text"].split("\n\n", 1)[-1]
+
+
+def is_duplicate(result, picked):
+    """Check whether a chunk repeats one already picked."""
+    body = get_body(result)
+    for other in picked:
+        other_body = get_body(other)
+        if body in other_body or other_body in body:
+            return True
+    return False
+
+
 def pick_after_rerank(passed, month_count):
     """Keep the most useful results, with variety."""
     ranked = sorted(passed, key=get_rank_key, reverse=True)
@@ -261,6 +394,8 @@ def pick_after_rerank(passed, month_count):
     for result in ranked:
         if result["rerank_score"] < RERANK_MIN_SCORE:
             break
+        if is_duplicate(result, picked):
+            continue
         section = result["metadata"]["section"]
         source = result["metadata"]["source"]
         sources = section_sources.get(section, [])
@@ -291,6 +426,7 @@ def retrieve(question, openai_client, collection,
         "reranked": False,
         "rerank_error": "",
         "rerank_seconds": 0,
+        "closest": [],
     }
 
     rewrite_start = time.perf_counter()
@@ -308,6 +444,8 @@ def retrieve(question, openai_client, collection,
     if len(months) == 0 and previous_question != "":
         if not details["rewritten"] and search_text != question:
             months = find_question_months(previous_question)
+    if is_cause_question(search_text):
+        months = add_look_back(months)
     details["search_text"] = search_text
     details["months"] = months
 
@@ -334,10 +472,13 @@ def retrieve(question, openai_client, collection,
         details["status"] = "no_match"
         return [], details
 
+    candidates = filter_results(pool, WEAK_SCORE)
+    details["rerank_pool"] = len(candidates)
+
     rerank_start = time.perf_counter()
     try:
-        rerank(search_text, passed, openai_client)
-        results = pick_after_rerank(passed, len(months))
+        rerank(search_text, candidates, openai_client)
+        results = pick_after_rerank(candidates, len(months))
         details["reranked"] = True
     except Exception as error:
         details["rerank_error"] = str(error)
@@ -346,6 +487,9 @@ def retrieve(question, openai_client, collection,
 
     if len(results) == 0:
         details["status"] = "not_found"
+        if details["reranked"]:
+            ranked = sorted(candidates, key=get_rank_key, reverse=True)
+            details["closest"] = ranked[:3]
     return results, details
 
 

@@ -4,7 +4,7 @@ import json
 
 RERANK_MODEL = "gpt-6-luna"
 RERANK_EFFORT = "none"
-MAX_PASSAGE_CHARS = 1200
+MAX_PASSAGE_CHARS = 1700
 
 RERANK_INSTRUCTIONS = """You help an assistant answer questions \
 about Tephra, a backcountry ski gear brand, using its reports, \
@@ -28,6 +28,18 @@ notes where people report what happened are often the answer.
 full-year or year-to-date totals over single-month figures. \
 Single-month figures are supporting context, so score them 2 \
 at most for a full-year question.
+- For "why" questions about a metric that changed, the cause is \
+often in a different document from the numbers and may not name \
+the metric at all. Score 3 for a passage that describes a dated \
+change or finding that could explain the move, such as a site, \
+theme or tracking change, a removed or broken script, pixel or \
+audience, a budget, bid or campaign change, a promotion, a stock \
+problem, a launch, seasonality or snow conditions.
+- For "why" questions, the month before the move is also the \
+right time period, because causes come before their effects.
+- Messages, meeting notes or change log entries where someone \
+confirms or fixes the cause of a problem are key evidence, so \
+score them 3.
 
 Reply with JSON only, in this shape:
 {"scores": [{"id": "P1", "score": 3}, {"id": "P2", "score": 0}]}
