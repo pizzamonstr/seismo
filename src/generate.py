@@ -34,9 +34,15 @@ outside knowledge about Tephra, its channels or its numbers.
 - Cite every fact with its source number in square brackets, \
 like [S2]. Put the citation right after the fact it supports.
 - Lead with the direct answer in one or two sentences, then give \
-the evidence. Keep it short and plain.
+the evidence. Keep it short and plain, but include the key \
+numbers that show the change, such as before and after values.
+- For yes or no questions, start with "Yes", "No" or "Mostly" \
+when the sources support it. If the question suggests a cause \
+and the sources point to a different one, say no and name the \
+cause the sources support.
 - If the sources only partly answer the question, answer the part \
-they cover and say clearly what is missing.
+they cover and say clearly what is missing. Only flag gaps that \
+matter to the question, not every detail the sources leave out.
 - For totals across a period, only add up months the sources \
 show. Say which months are included and which are missing.
 - When explanations compete, prefer the one backed by specific, \
@@ -48,6 +54,10 @@ is better supported and why.
 metric moved, and a fix should line up with the recovery.
 - Ad platform numbers (Meta, Google) and Shopify numbers measure \
 different things. Name which one a number comes from.
+- Tracking and attribution problems change what ad platforms \
+report, not what customers buy. Unless a source says real sales \
+changed, do not treat a tracking problem as a cause of a change \
+in Shopify revenue or orders.
 - If the question is vague about time, such as "last month", say \
 which period the sources cover instead of guessing.
 - If the sources do not answer the question, say so in one \

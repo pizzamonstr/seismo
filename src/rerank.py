@@ -42,6 +42,9 @@ right time period, because causes come before their effects.
 - Messages, meeting notes or change log entries where someone \
 confirms or fixes the cause of a problem are key evidence, so \
 score them 3.
+- For questions that ask whether something caused a change, \
+passages about other possible causes of that change are also \
+key evidence, so score them 3 when they explain it.
 - Plans for a future year are written in the year before, in \
 places like year-end reviews and postmortems. Do not treat them \
 as the wrong time period.

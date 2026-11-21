@@ -62,11 +62,13 @@ METRIC_DRIVERS = {
     ],
     "revenue": [
         "orders", "average order value", "discounts", "stock",
-        "launches", "seasonality",
+        "launches", "seasonality", "channel mix changes",
+        "budget shifts between campaigns", "brand search",
     ],
     "sales": [
         "orders", "average order value", "discounts", "stock",
-        "launches", "seasonality",
+        "launches", "seasonality", "channel mix changes",
+        "budget shifts between campaigns", "brand search",
     ],
     "aov": ["discounts", "product mix", "promotions"],
     "sessions": [
