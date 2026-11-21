@@ -1,12 +1,14 @@
 """Score retrieved chunks with a chat model."""
 
 import json
-
+import math
+from concurrent.futures import ThreadPoolExecutor
 from src.metric_map import GLOSSARY
 
 RERANK_MODEL = "gpt-6-luna"
 RERANK_EFFORT = "none"
 MAX_PASSAGE_CHARS = 1700
+RERANK_BATCH_SIZE = 24
 
 RERANK_INSTRUCTIONS = """You help an assistant answer questions \
 about Tephra, a backcountry ski gear brand, using its reports, \
@@ -76,14 +78,11 @@ def read_scores(reply, count):
     return scores
 
 
-def rerank(question, results, openai_client):
-    """Add a 0 to 3 usefulness score to each result."""
-    if len(results) == 0:
-        return results
-
+def score_batch(question, batch, openai_client):
+    """Score one batch of results in a single model call."""
     message = (
         f"Question: {question}\n\n"
-        f"Passages:\n\n{build_passages(results)}"
+        f"Passages:\n\n{build_passages(batch)}"
     )
     response = openai_client.chat.completions.create(
         model=RERANK_MODEL,
@@ -95,8 +94,34 @@ def rerank(question, results, openai_client):
         ],
     )
     reply = response.choices[0].message.content
-    scores = read_scores(reply, len(results))
+    return read_scores(reply, len(batch))
 
-    for index in range(len(results)):
-        results[index]["rerank_score"] = scores[index]
+
+def split_batches(results):
+    """Deal the results into batches, like dealing cards."""
+    count = math.ceil(len(results) / RERANK_BATCH_SIZE)
+    batches = []
+    for start in range(count):
+        batches.append(results[start::count])
+    return batches
+
+
+def rerank(question, results, openai_client):
+    """Add a 0 to 3 usefulness score to each result."""
+    if len(results) == 0:
+        return results
+
+    batches = split_batches(results)
+    with ThreadPoolExecutor(max_workers=len(batches)) as workers:
+        jobs = []
+        for batch in batches:
+            job = workers.submit(
+                score_batch, question, batch, openai_client
+            )
+            jobs.append(job)
+
+        for batch, job in zip(batches, jobs):
+            scores = job.result()
+            for index in range(len(batch)):
+                batch[index]["rerank_score"] = scores[index]
     return results
