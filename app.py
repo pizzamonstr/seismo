@@ -18,6 +18,7 @@ from src.generate import (
     renumber_stream,
     stream_answer,
 )
+from src.usage_log import log_found_via, log_question, new_visit_id
 
 st.set_page_config(page_title="Seismo", layout="centered")
 
@@ -148,6 +149,8 @@ def start_session():
         st.session_state.questions_asked = 0
     if "found_via" not in st.session_state:
         st.session_state.found_via = ""
+    if "visit_id" not in st.session_state:
+        st.session_state.visit_id = new_visit_id()
 
 
 def show_sources(citations):
@@ -221,6 +224,7 @@ def answer_in_chat(question, openai_client, collection):
             if details["status"] == "flagged":
                 summary = "Declined"
             status.update(label=summary, state="complete")
+            details["total_seconds"] = time.perf_counter() - start
             text = fallback_text(details)
             st.markdown(text)
             return text, [], details, summary, []
@@ -244,6 +248,8 @@ def answer_in_chat(question, openai_client, collection):
         return text, [], {"status": "error"}, summary, []
 
     total_seconds = time.perf_counter() - start
+    details["write_seconds"] = write_seconds
+    details["total_seconds"] = total_seconds
     timings = build_timings(details, write_seconds, total_seconds)
     show_timings(status, timings)
     checked = details.get("rerank_pool", len(results))
@@ -293,6 +299,10 @@ def show_found_via():
     )
     if picked is not None:
         st.session_state.found_via = picked
+        try:
+            log_found_via(st.session_state.visit_id, picked)
+        except Exception as error:
+            print(f"Logging error: {error}")
         st.rerun()
 
 
@@ -385,6 +395,16 @@ def chat_tab(openai_client, collection):
                 show_more_questions()
 
 
+def save_to_log(question, details, citations):
+    """Log the question, without ever breaking the chat."""
+    try:
+        log_question(
+            st.session_state.visit_id, question, details, citations
+        )
+    except Exception as error:
+        print(f"Logging error: {error}")
+
+
 def ask_seismo(question, openai_client, collection):
     """Show a new question and Seismo's answer, and save both."""
     count_question()
@@ -400,6 +420,7 @@ def ask_seismo(question, openai_client, collection):
         )
     if details["status"] == "ok":
         st.session_state.previous_question = details["search_text"]
+    save_to_log(question, details, citations)
 
     st.session_state.messages.append({
         "role": "assistant",
