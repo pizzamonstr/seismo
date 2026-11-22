@@ -32,6 +32,7 @@ from src.generate import (
     renumber_stream,
     stream_answer,
 )
+from src.how_it_works import show_how_it_works
 from src.themes import find_themes
 from src.usage_log import log_found_via, log_question, new_visit_id
 
@@ -607,6 +608,6 @@ chat, how_it_works, analytics = st.tabs(
 with chat:
     chat_tab(openai_client, collection)
 with how_it_works:
-    st.write("Coming soon.")
+    show_how_it_works()
 with analytics:
     analytics_tab()
