@@ -77,13 +77,15 @@ to what you can help with."""
 
 NO_MATCH_MESSAGE = (
     "Hmm, I couldn't find anything in Tephra's docs on that one. "
-    "I'm best with questions about our marketing channels, sales, "
-    "campaigns and why the numbers moved. Want to try one of those?"
+    "I'm best with questions about Tephra's marketing channels, "
+    "sales, campaigns and why the numbers moved. Want to try one "
+    "of those?"
 )
 
 NOT_FOUND_MESSAGE = (
     "I dug through the docs and found some related ground, but "
-    "nothing that answers that directly."
+    "nothing that answers that directly. Try rephrasing, or ask "
+    "about a specific month or channel."
 )
 
 TOO_LONG_MESSAGE = (

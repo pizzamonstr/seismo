@@ -8,15 +8,45 @@ from src.usage_log import LOG_FILE, SAMPLE_FILE, read_events
 
 STATUS_NAMES = {
     "ok": "Answered",
-    "no_match": "Not about Tephra",
-    "not_found": "Related, but no answer",
-    "flagged": "Declined (moderation)",
-    "too_long": "Too long",
+    "no_match": "Not About Tephra",
+    "not_found": "Related but Unanswered",
+    "flagged": "Declined by Moderation",
+    "too_long": "Too Long",
     "empty": "Empty",
     "error": "Error",
 }
 GAP_STATUSES = ["no_match", "not_found"]
 PACIFIC = "America/Vancouver"
+MONTH_NAMES = {
+    "01": "January", "02": "February", "03": "March",
+    "04": "April", "05": "May", "06": "June", "07": "July",
+    "08": "August", "09": "September", "10": "October",
+    "11": "November", "12": "December",
+}
+NAME_PATTERNS = [
+    (r"tarn-digital-tephra-report-(?P<year>\d{4})-(?P<month>\d{2})"
+     r"-\w+", "Agency report, {month} {year}"),
+    (r"slack-marketing-(?P<year>\d{4})-(?P<month>\d{2})",
+     "Slack #marketing, {month} {year}"),
+    (r"qbr-(?P<year>\d{4})-(?P<period>q\d)-notes",
+     "QBR notes, {period} {year}"),
+    (r"site-tracking-changelog-(?P<year>\d{4})-(?P<period>q\d)",
+     "Tracking change log, {period} {year}"),
+    (r"customer-service-summary-(?P<year>\d{4})-(?P<period>q\d)",
+     "Customer service summary, {period} {year}"),
+    (r"klaviyo-email-performance-(?P<year>\d{4})-(?P<period>h\d)",
+     "Klaviyo email performance, {period} {year}"),
+    (r"conditions-watch-(?P<year>\d{4})-(?P<period>\w+)",
+     "Conditions watch, {period} {year}"),
+    (r"weekly-standup-(?P<year>\d{4})-(?P<month>\d{2})"
+     r"-(?P<day>\d{2})", "Weekly standup, {month} {day}, {year}"),
+    (r"inventory-update-(?P<year>\d{4})-(?P<month>\d{2})"
+     r"-(?P<day>\d{2})", "Inventory update, {month} {day}, {year}"),
+]
+PROPER_WORDS = [
+    "tephra", "fissile", "mackenzie", "klaviyo", "meta", "cerise",
+    "black", "friday", "july",
+]
 UPPER_WORDS = ["qbr", "ga4", "capi", "pmax", "v2.2"]
 STEP_COLUMNS = {
     "rewrite_seconds": "Understanding the question",
@@ -29,18 +59,63 @@ STEP_COLUMNS = {
 def readable_name(source):
     """Turn a file name into a short, readable document name."""
     stem = source.rsplit(".", 1)[0]
-    report = re.match(r"tarn-digital-tephra-report-(\d{4})-\d{2}-(\w+)",
-                      stem)
-    if report:
-        return f"Agency report, {report.group(2).title()} " \
-               f"{report.group(1)}"
+    for pattern, template in NAME_PATTERNS:
+        match = re.fullmatch(pattern, stem)
+        if match:
+            return template.format(**fill_parts(match.groupdict()))
+
+    stem = readable_dates(stem)
     words = []
     for word in stem.split("-"):
         if word in UPPER_WORDS or re.fullmatch(r"q\d", word):
             word = word.upper()
+        elif word in PROPER_WORDS:
+            word = word.title()
         words.append(word)
     name = " ".join(words)
     return name[0].upper() + name[1:]
+
+
+def swap_date(match):
+    """Turn 2025-10-24 into October 24, 2025."""
+    month = MONTH_NAMES[match.group(2)]
+    return f"{month} {int(match.group(3))}, {match.group(1)}"
+
+
+def swap_two_parts(match):
+    """Turn 2025-26 into 2025/26, or 2025-08 into August 2025."""
+    first = match.group(1)
+    second = match.group(2)
+    if int(second) == int(first[2:]) + 1:
+        return f"{first}/{second}"
+    if second in MONTH_NAMES:
+        return f"{MONTH_NAMES[second]} {first}"
+    return match.group(0)
+
+
+def readable_dates(stem):
+    """Rewrite dates inside a file name so they read naturally."""
+    stem = re.sub(r"(\d{4})-(\d{2})-(\d{2})", swap_date, stem)
+    stem = re.sub(r"(\d{4})-(\d{2})(?=-|$)", swap_two_parts, stem)
+    return stem
+
+
+def fill_parts(parts):
+    """Make matched name parts readable: months, periods, days."""
+    readable = {}
+    for key in parts:
+        value = parts[key]
+        if key == "month":
+            value = MONTH_NAMES[value]
+        elif key == "day":
+            value = str(int(value))
+        elif key == "period":
+            if value[1:].isdigit():
+                value = value.upper()
+            else:
+                value = value.title()
+        readable[key] = value
+    return readable
 
 
 def load_questions(include_sample):

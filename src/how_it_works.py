@@ -5,75 +5,119 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from src.tiles import show_tile_grid
+
 RETRIEVAL_RESULTS = Path("eval/results/results-round6.csv")
 ANSWER_RESULTS = Path("eval/results/answers-round4.csv")
 GITHUB_URL = "https://github.com/pizzamonstr/seismo"
 STEPS_PER_ROW = 4
+TILES_PER_ROW = 4
+COST_PER_QUESTION = "1¢ CAD"
 
 WHAT_IT_IS = (
-    "When a marketing metric moves, the reason is usually scattered "
-    "across agency reports, change logs, Slack threads and meeting "
-    "notes. Often it shows up as a gap between what an ad platform "
-    "reports and what the business actually saw in Shopify.\n\n"
-    "Seismo reads all of those documents for Tephra, a fictional "
-    "backcountry ski brand, and answers \"why did this move?\" in "
-    "plain language, citing the exact documents it used."
+    "When a marketing metric moves, the reason is rarely in one "
+    "place. It's spread across agency reports, change logs, Slack "
+    "threads and meeting notes, and it often shows up as a gap "
+    "between what an ad platform reports and what actually happened "
+    "in Shopify.\n\n"
+    "Seismo is a retrieval-augmented generation (RAG) chatbot built "
+    "on 59 of those documents from Tephra, a fictional backcountry "
+    "ski brand, covering all of 2025. Ask it why a metric moved, and "
+    "it answers in plain language, citing the exact documents it "
+    "used.\n\n"
+    "Try it in the Chat tab."
+)
+
+WHY_I_BUILT_IT = (
+    "I've spent about eight years in marketing, and the hardest "
+    "part of the job is rarely the numbers themselves. It's "
+    "finding out why they moved. The answer is usually buried in a "
+    "change log, a Slack thread or an agency report, and digging it "
+    "out can take hours. I built Seismo to do that digging."
+)
+
+HARDEST_PROBLEM = (
+    "Asked why Meta retargeting fell apart in March 2025, Seismo "
+    "repeated the agency's answer: creative fatigue. The real cause "
+    "was a tracking script removed in a February 11 theme migration, "
+    "and it was sitting in the change log and Slack. It just never "
+    "made it into the candidate pool.\n\n"
+    "Two things kept it out. Agency reports make up 63% of the "
+    "chunks, so they crowded out every other folder. And the cause "
+    "happened a month before the month in the question.\n\n"
+    "I fixed it with reserved seats for every folder and month, a "
+    "look-back to the month before, and a second search for likely "
+    "causes from the metric map. Now Seismo names the removed script "
+    "and explains why the creative fatigue story doesn't hold up."
 )
 
 PIPELINE_STEPS = [
-    ("Question", "Ask in your own words, typos and all."),
-    ("Check", "Too long or harmful questions are turned away."),
-    ("Rewrite", "Fixes spelling, follow-ups and jargon."),
-    ("Search", "Looks by topic, month, folder and cause."),
-    ("Gate", "Questions not about Tephra stop here."),
-    ("Re-rank", "Scores up to 70 passages and keeps 8."),
-    ("Write", "Answers only from those 8 sources."),
+    ("Question", "Takes your question in your own words, typos "
+                 "and all."),
+    ("Check", "Moderation turns away questions that are too long "
+              "or harmful."),
+    ("Rewrite", "Fixes spelling, completes follow-ups and expands "
+                "jargon with a glossary."),
+    ("Search", "Runs a vector search by topic, month, folder and "
+               "likely cause."),
+    ("Gate", "Stops questions with no chunk above the similarity "
+             "threshold."),
+    ("Re-rank", "Scores up to 70 candidate chunks and keeps the "
+                "top 8."),
+    ("Write", "Generates the answer using only those 8 chunks."),
     ("Cite", "Numbers each source so you can check it."),
 ]
 
 DESIGN_CHOICES = [
     (
-        "Format-aware chunking",
-        "PDF tables are rebuilt from text positions, so a single row, "
-        "like Meta CPA in January 2025, can be found on its own.",
+        "Format-Aware Chunking",
+        "PDF tables are rebuilt from text positions, so a single "
+        "row, like Meta's CPA in January 2025, can be retrieved on "
+        "its own.",
     ),
     (
-        "A metric map",
-        "A glossary plus the usual causes behind each metric, so "
-        "\"why\" questions get a second search for likely causes.",
+        "A Metric Map",
+        "A glossary plus the usual causes behind each metric. For "
+        "\"why\" questions, Seismo runs a second search for those "
+        "likely causes, not just the symptom.",
     ),
     (
-        "Fair seats in the search",
-        "Agency reports are 63% of the chunks, so every folder and "
-        "month in the question gets its own seats in the search.",
+        "Fair Seats in the Search",
+        "Agency reports make up 63% of the chunks, so every folder "
+        "and every month in the question gets reserved seats in the "
+        "candidate pool.",
     ),
     (
         "Re-ranking",
-        "A small model scores every candidate from 0 to 3 in "
-        "parallel batches, so the answer model reads only the best 8.",
+        "A smaller model scores up to 70 candidates from 0 to 3 in "
+        "parallel batches. Only the top 8 go on to the model that "
+        "generates the answer.",
     ),
     (
         "Guardrails",
-        "Answers come only from sources, sources are treated as "
-        "data, harmful questions are declined and visits have limits.",
+        "Seismo answers only from retrieved sources and treats them "
+        "as data, not instructions, to guard against prompt "
+        "injection. Moderation declines harmful questions, and each "
+        "visit has a question limit.",
     ),
     (
-        "Tested after every change",
-        "54 questions with known answers were rerun after each "
-        "change, so every fix was measured instead of guessed.",
+        "Tested After Every Change",
+        "54 evaluation questions with known answers were rerun after "
+        "each change, so every fix was measured, not guessed.",
     ),
 ]
 
 LIMITATIONS = [
-    "Seismo finds the best evidence, not all of it. Questions that "
-    "need every month added up, or a full list of everything, can "
+    "Retrieval finds the best evidence, not all of it. Questions "
+    "that need every month aggregated, or an exhaustive list, can "
     "come back incomplete.",
-    "The same model family writes the answers and grades them, so "
-    "the answer scores may be a little generous.",
+    "The same model family generates and grades the answers, so "
+    "the scores may be a little generous.",
     "The evaluation questions were written alongside Seismo, so the "
-    "scores show it works on this storyline, not on any brand.",
-    "Ask about the same thing twice and the wording can differ, "
-    "because the models are not fully deterministic.",
+    "scores show it works on this storyline, not that it would "
+    "generalize to any brand.",
+    "Ask the same thing twice and the wording can change, because "
+    "the models are not fully deterministic.",
 ]
 
 TECH_STACK = [
@@ -104,14 +148,22 @@ CARD_STYLE = """
     padding: 0.9rem 1rem;
 }
 .card-title {
+    display: flex;
+    align-items: center;
     color: #7aa7d6;
     font-weight: 600;
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.5rem;
 }
 .card-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 1px solid #7aa7d6;
+    border-radius: 50%;
     font-size: 0.8rem;
-    opacity: 0.75;
-    margin-right: 0.35rem;
+    margin-right: 0.5rem;
 }
 .card-text {
     font-size: 0.9rem;
@@ -121,6 +173,16 @@ CARD_STYLE = """
     color: #8a8f98;
     align-self: center;
     text-align: center;
+}
+@media (max-width: 640px) {
+    .step-row,
+    .card-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    .step-arrow {
+        display: none;
+    }
 }
 </style>
 """
@@ -170,18 +232,41 @@ def load_scores():
 
 
 def build_score_tiles(retrieval, answers):
-    """Work out the six headline results."""
+    """Work out the eight headline results."""
     answerable = retrieval[retrieval["should_reject"] == False]
+    answerable_answers = answers[answers["should_reject"] == False]
     rejects = answers[answers["should_reject"] == True]
     wrong = (answers["verdict"] == "wrong").mean()
     return [
-        ("Sources found", f"{answerable['source_found'].mean():.0%}"),
-        ("Answer score", f"{answers['points'].mean():.0%}"),
-        ("Wrong answers", f"{wrong:.0%}"),
+        ("Sources Found", f"{answerable['source_found'].mean():.0%}"),
+        ("Answer Score", f"{answers['points'].mean():.0%}"),
+        ("Wrong Answers", f"{wrong:.0%}"),
         ("Grounded", f"{answers['grounded'].mean():.0%}"),
-        ("Off-topic handled", f"{rejects['points'].mean():.0%}"),
-        ("Average answer", f"{answers['total_seconds'].mean():.1f} s"),
+        ("Right Source Cited",
+         f"{answerable_answers['cited_expected'].mean():.0%}"),
+        ("Off-Topic Handled", f"{rejects['points'].mean():.0%}"),
+        ("Average Answer", f"{answers['total_seconds'].mean():.1f} s"),
+        ("Cost per Question", COST_PER_QUESTION),
     ]
+
+
+def build_proof_line():
+    """Sum up the evaluation in one line for the page header."""
+    retrieval, answers = load_scores()
+    if answers is None:
+        return ""
+    score = answers["points"].mean()
+    wrong = (answers["verdict"] == "wrong").sum()
+    wrong_text = "no wrong answers"
+    if wrong == 1:
+        wrong_text = "1 wrong answer"
+    elif wrong > 1:
+        wrong_text = f"{wrong} wrong answers"
+    seconds = answers["total_seconds"].mean()
+    return (
+        f"Tested on {len(answers)} questions: {score:.0%} answer "
+        f"score, {wrong_text}, {seconds:.1f} s average answer."
+    )
 
 
 def build_required_table(answers):
@@ -212,12 +297,9 @@ def show_evaluation():
         "questions it should turn down."
     )
     tiles = build_score_tiles(retrieval, answers)
-    for start in range(0, len(tiles), 3):
-        columns = st.columns(3)
-        for column, (label, value) in zip(columns, tiles[start:]):
-            column.metric(label, value)
+    show_tile_grid(tiles, TILES_PER_ROW)
 
-    with st.expander("See the required 10 test questions"):
+    with st.expander("See the Required 10 Test Questions"):
         st.table(build_required_table(answers), hide_index=True)
 
 
@@ -240,11 +322,17 @@ def show_how_it_works():
     st.subheader("What Seismo Is")
     st.markdown(WHAT_IT_IS)
 
+    st.subheader("Why I Built It")
+    st.markdown(WHY_I_BUILT_IT)
+
     st.subheader("How a Question Becomes an Answer")
     st.html(build_steps_html())
 
     st.subheader("Design Choices That Mattered")
     st.html(build_choices_html())
+
+    st.subheader("The Hardest Problem")
+    st.markdown(HARDEST_PROBLEM)
 
     show_evaluation()
     show_lists()

@@ -1,26 +1,13 @@
 """Seismo: a metric investigation assistant for Tephra."""
 
-import os
 import time
 from datetime import date
 
-import altair as alt
 import openai
 import streamlit as st
 from openai import OpenAI
 
-from src.analytics import (
-    add_themes,
-    average_step_times,
-    build_question_table,
-    count_cited_sources,
-    count_outcomes,
-    count_themes,
-    find_gaps,
-    load_found_via,
-    load_questions,
-    summarize,
-)
+from src.analytics_tab import show_analytics
 from src.embed import get_api_key, get_collection
 from src.generate import (
     EMPTY_MESSAGE,
@@ -32,8 +19,7 @@ from src.generate import (
     renumber_stream,
     stream_answer,
 )
-from src.how_it_works import show_how_it_works
-from src.themes import find_themes
+from src.how_it_works import build_proof_line, show_how_it_works
 from src.usage_log import log_found_via, log_question, new_visit_id
 
 st.set_page_config(page_title="Seismo", layout="centered")
@@ -41,11 +27,11 @@ st.set_page_config(page_title="Seismo", layout="centered")
 SEISMO_AVATAR = ":material/earthquake:"
 VISITOR_AVATAR = ":material/person:"
 GREETING = (
-    "Hey, I'm Seismo. I help the Tephra team figure out why the "
+    "Hey, I'm Seismo. I help the Tephra team figure out why their "
     "numbers moved, like a jump in ad costs or a slow sales month. "
-    "I dig through Tephra's reports, change logs and team notes, "
-    "and I show you exactly where each answer came from. What "
-    "would you like to look into?"
+    "I dig through Tephra's 2025 reports, change logs and team "
+    "notes, and I show you exactly where each answer came from. "
+    "What would you like to look into?"
 )
 STEP_LABELS = {
     "rewrite": "Listening for the tremor...",
@@ -58,7 +44,7 @@ MAX_QUESTIONS_PER_SESSION = 15
 DAILY_QUESTION_CAP = 300
 SESSION_LIMIT_MESSAGE = (
     "That's 15 questions for this visit, which is my limit. Thanks "
-    "for digging in with me."
+    "for digging in with me, and you're welcome back another time."
 )
 DAILY_LIMIT_MESSAGE = (
     "I've answered all the questions I can for today, so I'm taking "
@@ -79,12 +65,96 @@ STYLES = """
 div[data-testid="stSelectbox"] input[role="combobox"] {
     padding-left: 1.5rem;
 }
+.st-key-chat_box {
+    padding: 1rem !important;
+}
+div[data-testid="stChatMessage"] {
+    padding: 1rem !important;
+}
+div[data-testid="stExpander"] details {
+    border-color: #7aa7d6;
+    border-radius: 0.6rem;
+}
+.st-key-chat_box,
+div[class*="st-key-card-"] {
+    border-color: #7aa7d6 !important;
+}
+div[data-testid="stChatInput"] > div {
+    border-color: #7aa7d6;
+}
+div[class*="st-key-user-msg-"] div[data-testid="stChatMessage"] {
+    background-color: rgba(122, 167, 214, 0.2) !important;
+}
+div[class*="st-key-starter-"] button,
+div[class*="st-key-starter-"] button:hover {
+    border-color: #7aa7d6;
+    color: #ffffff;
+}
+div[class*="st-key-starter-"] button {
+    height: auto;
+    max-width: 100%;
+    text-align: left;
+}
+div[class*="st-key-starter-"] button * {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
+div[data-testid="stSelectbox"] div[role="group"] {
+    border-color: #7aa7d6;
+}
+div[data-testid="stTab"] p {
+    font-size: 1rem;
+}
+.outcome-numbers {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 1rem;
+}
+.outcome-block {
+    display: flex;
+    flex-direction: column;
+}
+.outcome-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+.outcome-marker {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 2px;
+}
+.outcome-stage {
+    font-size: 0.8rem;
+    color: #9aa4b2;
+    margin-bottom: 0.5rem;
+}
+.outcome-number {
+    margin-top: auto;
+    font-size: 2rem;
+    line-height: 1;
+}
+.outcome-share {
+    font-size: 0.9rem;
+    color: #9aa4b2;
+    margin-left: 0.5rem;
+}
 </style>
 """
-ROW_HEIGHT = 36
-BAR_GAP = 0.35
+TAGLINE = (
+    "A RAG chatbot that explains why a brand's marketing metrics "
+    "moved, with citations."
+)
+PROFILE_LINKS = [
+    ("Portfolio", "https://nullhypothesis.ca"),
+    ("GitHub", "https://github.com/pizzamonstr/seismo"),
+    ("LinkedIn", ""),
+]
 FOUND_VIA_OPTIONS = [
-    "LinkedIn", "Portfolio site", "UBC class", "Somewhere else",
+    "LinkedIn", "Portfolio Site", "UBC Class", "Somewhere Else",
 ]
 STARTER_QUESTIONS = [
     "Why did Meta ROAS jump to 5.4 in September 2025?",
@@ -104,6 +174,15 @@ MORE_QUESTIONS = STARTER_QUESTIONS + [
     "Why did summer 2025 AOV go up compared with a normal "
     "off-season?",
 ]
+
+
+def build_links():
+    """Join the profile links that have an address."""
+    links = []
+    for name, url in PROFILE_LINKS:
+        if url != "":
+            links.append(f"[{name}]({url})")
+    return " | ".join(links)
 
 
 @st.cache_resource
@@ -175,7 +254,7 @@ def show_sources(citations):
     """List the cited sources in a fold-out panel."""
     if len(citations) == 0:
         return
-    with st.expander("View sources"):
+    with st.expander("View Sources"):
         for citation in citations:
             line = (
                 f"**[{citation['number']}]** {citation['title']} "
@@ -210,12 +289,10 @@ def build_timings(details, write_seconds, total_seconds):
         + details.get("search_seconds", 0)
     )
     return [
-        f"Understanding the question: "
-        f"{details.get('rewrite_seconds', 0):.1f} s",
-        f"Searching the documents: {search_seconds:.1f} s",
-        f"Weighing the evidence: "
-        f"{details.get('rerank_seconds', 0):.1f} s",
-        f"Writing the answer: {write_seconds:.1f} s",
+        f"Rewrite: {details.get('rewrite_seconds', 0):.1f} s",
+        f"Search: {search_seconds:.1f} s",
+        f"Re-rank: {details.get('rerank_seconds', 0):.1f} s",
+        f"Write: {write_seconds:.1f} s",
         f"Total: {total_seconds:.1f} s",
     ]
 
@@ -238,7 +315,7 @@ def answer_in_chat(question, openai_client, collection):
             report=make_reporter(status),
         )
         if len(results) == 0:
-            summary = "No matching documents"
+            summary = "No Matching Documents"
             if details["status"] == "flagged":
                 summary = "Declined"
             status.update(label=summary, state="complete")
@@ -259,7 +336,7 @@ def answer_in_chat(question, openai_client, collection):
         write_seconds = time.perf_counter() - write_start
     except Exception as error:
         print(f"Seismo error: {error}")
-        summary = "Hit a snag"
+        summary = "Hit a Snag"
         status.update(label=summary, state="error")
         text = friendly_error(error)
         st.markdown(text)
@@ -288,13 +365,16 @@ def pick_avatar(role):
     return VISITOR_AVATAR
 
 
-def show_history():
+def show_history(with_starters):
     """Show the greeting and every earlier message."""
     with st.chat_message("assistant", avatar=SEISMO_AVATAR):
         st.markdown(GREETING)
-    for message in st.session_state.messages:
+        if with_starters:
+            show_starters()
+    for index, message in enumerate(st.session_state.messages):
         role = message["role"]
-        with st.chat_message(role, avatar=pick_avatar(role)):
+        holder = st.container(key=f"{role}-msg-{index}")
+        with holder.chat_message(role, avatar=pick_avatar(role)):
             summary = message.get("summary", "")
             if summary != "":
                 status = st.status(
@@ -309,10 +389,14 @@ def show_found_via():
     """Ask, once and optionally, how the visitor found Seismo."""
     if st.session_state.found_via != "":
         return
+    st.caption(
+        "Quick question, totally optional: where did you find Seismo?"
+    )
     picked = st.pills(
-        "Quick question, totally optional: where did you find Seismo?",
+        "Where did you find Seismo?",
         FOUND_VIA_OPTIONS,
         selection_mode="single",
+        label_visibility="collapsed",
         key="found_via_pick",
     )
     if picked is not None:
@@ -378,8 +462,12 @@ def clear_chat():
 
 def chat_tab(openai_client, collection):
     """The main chat: history, input and new answers."""
-    top = st.container()
-    conversation = st.container(border=True, gap="medium")
+    conversation = st.container(
+        border=True, gap="small", key="chat_box"
+    )
+    top = conversation.container(
+        horizontal=True, horizontal_alignment="right"
+    )
 
     limit_text = ""
     if session_limit_reached():
@@ -396,18 +484,22 @@ def chat_tab(openai_client, collection):
         question = st.session_state.starter
         st.session_state.starter = ""
 
+    no_messages = len(st.session_state.messages) == 0
+    with_starters = no_messages and not question and limit_text == ""
+
     with conversation:
-        show_history()
+        show_history(with_starters)
         if limit_text != "":
             with st.chat_message("assistant", avatar=SEISMO_AVATAR):
                 st.markdown(limit_text)
         elif question:
             ask_seismo(question, openai_client, collection)
-        elif len(st.session_state.messages) == 0:
-            show_starters()
 
     if len(st.session_state.messages) > 0:
-        top.button("Clear chat", on_click=clear_chat)
+        top.button(
+            "New Chat", icon=":material/refresh:", type="tertiary",
+            on_click=clear_chat,
+        )
         if limit_text == "":
             with below:
                 show_more_questions()
@@ -429,7 +521,9 @@ def ask_seismo(question, openai_client, collection):
     st.session_state.messages.append(
         {"role": "user", "content": question}
     )
-    with st.chat_message("user", avatar=VISITOR_AVATAR):
+    index = len(st.session_state.messages) - 1
+    holder = st.container(key=f"user-msg-{index}")
+    with holder.chat_message("user", avatar=VISITOR_AVATAR):
         st.markdown(question)
 
     with st.chat_message("assistant", avatar=SEISMO_AVATAR):
@@ -449,165 +543,30 @@ def ask_seismo(question, openai_client, collection):
     })
 
 
-def bar_chart(data, value, label, whole_numbers=True):
-    """Draw a simple horizontal bar chart, longest bar first."""
-    x_axis = alt.Axis()
-    if whole_numbers:
-        x_axis = alt.Axis(format="d", tickMinStep=1)
-    chart = alt.Chart(data).mark_bar().encode(
-        x=alt.X(f"{value}:Q", title=value, axis=x_axis),
-        y=alt.Y(
-            f"{label}:N", sort="-x", title=None,
-            axis=alt.Axis(labelLimit=320),
-            scale=alt.Scale(paddingInner=BAR_GAP, paddingOuter=0.2),
-        ),
-        tooltip=[label, value],
-    ).properties(height=alt.Step(ROW_HEIGHT))
-    st.altair_chart(chart, width="stretch")
-
-
-def show_headline(questions):
-    """Show the four headline numbers."""
-    summary = summarize(questions)
-    columns = st.columns(4)
-    columns[0].metric("Questions", summary["questions"])
-    columns[1].metric("Visits", summary["visits"])
-    columns[2].metric("Answered", f"{summary['answered_share']:.0%}")
-    columns[3].metric(
-        "Average answer time", f"{summary['average_seconds']:.1f} s"
-    )
-
-
-@st.cache_data(show_spinner="Sorting questions into themes...")
-def cached_themes(question_list):
-    """Find themes once per set of questions, then reuse them."""
-    openai_client, collection = load_resources()
-    try:
-        return find_themes(list(question_list), openai_client)
-    except Exception as error:
-        print(f"Theme error: {error}")
-        return {}
-
-
-def get_analytics_password():
-    """Find the analytics password in Render or local secrets."""
-    password = os.environ.get("ANALYTICS_PASSWORD", "")
-    if password != "":
-        return password
-    try:
-        return st.secrets.get("ANALYTICS_PASSWORD", "")
-    except Exception:
-        return ""
-
-
-def show_themes(questions):
-    """Show question themes and where Seismo came up short."""
-    st.subheader("Question Themes")
-    st.caption(
-        "Similar questions grouped by meaning. Theme names are "
-        "written by the model, not copied from visitors."
-    )
-    bar_chart(count_themes(questions), "Questions", "Theme")
-
-    gaps = find_gaps(questions)
-    st.subheader("Where Seismo Came Up Short")
-    st.caption(
-        "Questions Seismo couldn't answer from Tephra's documents, "
-        "by theme. These point to missing documents."
-    )
-    if len(gaps) == 0:
-        st.caption("None so far.")
-    else:
-        bar_chart(count_themes(gaps), "Questions", "Theme")
-
-
-def show_private_details(questions):
-    """Show raw questions only after the right password."""
-    st.divider()
-    st.subheader("Private Details")
-    password = get_analytics_password()
-    if password == "":
-        st.caption("Set ANALYTICS_PASSWORD to unlock this section.")
-        return
-    typed = st.text_input("Password", type="password")
-    if typed == "":
-        st.caption("Raw questions are only visible to the owner.")
-        return
-    if typed != password:
-        st.error("That password isn't right.")
-        return
-
-    st.markdown("**Questions Seismo couldn't answer**")
-    st.dataframe(
-        build_question_table(find_gaps(questions)), hide_index=True
-    )
-    st.markdown("**All questions**")
-    st.dataframe(build_question_table(questions), hide_index=True)
-
-
-def analytics_tab():
-    """Public summaries of how Seismo is being used."""
-    include_sample = st.toggle(
-        "Include sample questions",
-        value=True,
-        help="The 54 test questions from Seismo's evaluation, asked "
-             "once before launch.",
-    )
-    questions = load_questions(include_sample)
-    if len(questions) == 0:
-        st.info("No questions yet. Ask Seismo something in Chat.")
-        return
-
-    show_headline(questions)
-
-    st.subheader("How Questions Were Handled")
-    bar_chart(count_outcomes(questions), "Questions", "Outcome")
-
-    st.subheader("Most-Cited Documents")
-    cited = count_cited_sources(questions)
-    if len(cited) > 0:
-        bar_chart(cited, "Times cited", "Document")
-
-    st.subheader("Where the Time Goes")
-    st.caption("Average seconds per step, for answered questions.")
-    bar_chart(
-        average_step_times(questions), "Seconds", "Step",
-        whole_numbers=False,
-    )
-
-    themes = cached_themes(tuple(questions["question"]))
-    questions = add_themes(questions, themes)
-    if len(themes) > 0:
-        show_themes(questions)
-
-    st.subheader("Where Visitors Found Seismo")
-    found_via = load_found_via()
-    if len(found_via) == 0:
-        st.caption("No answers yet. This only counts real visitors.")
-    else:
-        st.caption("Real visitors only.")
-        bar_chart(found_via, "Visitors", "Where")
-
-    show_private_details(questions)
-
-
 st.html(STYLES)
 start_session()
 show_found_via()
 st.title("Seismo")
+st.markdown(TAGLINE)
+proof_line = build_proof_line()
+if proof_line != "":
+    st.markdown(proof_line)
 st.caption(
-    "A portfolio project by Kaiya Sjoholm. Tephra is a fictional "
-    "brand, and all of its data is made up."
+    "A portfolio project by Kaiya Sjoholm: " + build_links()
+    + "  \nTephra isn't a real brand. Its documents and data were "
+    "created for this project."
 )
 
 openai_client, collection = load_resources()
 
-chat, how_it_works, analytics = st.tabs(
-    ["Chat", "How It Works", "Analytics"]
-)
+chat, how_it_works, analytics = st.tabs([
+    ":material/forum: Chat",
+    ":material/account_tree: How It Works",
+    ":material/monitoring: Analytics",
+])
 with chat:
     chat_tab(openai_client, collection)
 with how_it_works:
     show_how_it_works()
 with analytics:
-    analytics_tab()
+    show_analytics(openai_client)
