@@ -1,5 +1,6 @@
 """Seismo: a metric investigation assistant for Tephra."""
 
+import os
 import time
 from datetime import date
 
@@ -9,9 +10,13 @@ import streamlit as st
 from openai import OpenAI
 
 from src.analytics import (
+    add_themes,
     average_step_times,
+    build_question_table,
     count_cited_sources,
     count_outcomes,
+    count_themes,
+    find_gaps,
     load_found_via,
     load_questions,
     summarize,
@@ -27,6 +32,7 @@ from src.generate import (
     renumber_stream,
     stream_answer,
 )
+from src.themes import find_themes
 from src.usage_log import log_found_via, log_question, new_visit_id
 
 st.set_page_config(page_title="Seismo", layout="centered")
@@ -74,6 +80,8 @@ div[data-testid="stSelectbox"] input[role="combobox"] {
 }
 </style>
 """
+ROW_HEIGHT = 36
+BAR_GAP = 0.35
 FOUND_VIA_OPTIONS = [
     "LinkedIn", "Portfolio site", "UBC class", "Somewhere else",
 ]
@@ -440,16 +448,20 @@ def ask_seismo(question, openai_client, collection):
     })
 
 
-def bar_chart(data, value, label):
+def bar_chart(data, value, label, whole_numbers=True):
     """Draw a simple horizontal bar chart, longest bar first."""
+    x_axis = alt.Axis()
+    if whole_numbers:
+        x_axis = alt.Axis(format="d", tickMinStep=1)
     chart = alt.Chart(data).mark_bar().encode(
-        x=alt.X(f"{value}:Q", title=value),
+        x=alt.X(f"{value}:Q", title=value, axis=x_axis),
         y=alt.Y(
             f"{label}:N", sort="-x", title=None,
             axis=alt.Axis(labelLimit=320),
+            scale=alt.Scale(paddingInner=BAR_GAP, paddingOuter=0.2),
         ),
         tooltip=[label, value],
-    )
+    ).properties(height=alt.Step(ROW_HEIGHT))
     st.altair_chart(chart, width="stretch")
 
 
@@ -463,6 +475,73 @@ def show_headline(questions):
     columns[3].metric(
         "Average answer time", f"{summary['average_seconds']:.1f} s"
     )
+
+
+@st.cache_data(show_spinner="Sorting questions into themes...")
+def cached_themes(question_list):
+    """Find themes once per set of questions, then reuse them."""
+    openai_client, collection = load_resources()
+    try:
+        return find_themes(list(question_list), openai_client)
+    except Exception as error:
+        print(f"Theme error: {error}")
+        return {}
+
+
+def get_analytics_password():
+    """Find the analytics password in Render or local secrets."""
+    password = os.environ.get("ANALYTICS_PASSWORD", "")
+    if password != "":
+        return password
+    try:
+        return st.secrets.get("ANALYTICS_PASSWORD", "")
+    except Exception:
+        return ""
+
+
+def show_themes(questions):
+    """Show question themes and where Seismo came up short."""
+    st.subheader("Question Themes")
+    st.caption(
+        "Similar questions grouped by meaning. Theme names are "
+        "written by the model, not copied from visitors."
+    )
+    bar_chart(count_themes(questions), "Questions", "Theme")
+
+    gaps = find_gaps(questions)
+    st.subheader("Where Seismo Came Up Short")
+    st.caption(
+        "Questions Seismo couldn't answer from Tephra's documents, "
+        "by theme. These point to missing documents."
+    )
+    if len(gaps) == 0:
+        st.caption("None so far.")
+    else:
+        bar_chart(count_themes(gaps), "Questions", "Theme")
+
+
+def show_private_details(questions):
+    """Show raw questions only after the right password."""
+    st.divider()
+    st.subheader("Private Details")
+    password = get_analytics_password()
+    if password == "":
+        st.caption("Set ANALYTICS_PASSWORD to unlock this section.")
+        return
+    typed = st.text_input("Password", type="password")
+    if typed == "":
+        st.caption("Raw questions are only visible to the owner.")
+        return
+    if typed != password:
+        st.error("That password isn't right.")
+        return
+
+    st.markdown("**Questions Seismo couldn't answer**")
+    st.dataframe(
+        build_question_table(find_gaps(questions)), hide_index=True
+    )
+    st.markdown("**All questions**")
+    st.dataframe(build_question_table(questions), hide_index=True)
 
 
 def analytics_tab():
@@ -490,7 +569,15 @@ def analytics_tab():
 
     st.subheader("Where the Time Goes")
     st.caption("Average seconds per step, for answered questions.")
-    bar_chart(average_step_times(questions), "Seconds", "Step")
+    bar_chart(
+        average_step_times(questions), "Seconds", "Step",
+        whole_numbers=False,
+    )
+
+    themes = cached_themes(tuple(questions["question"]))
+    questions = add_themes(questions, themes)
+    if len(themes) > 0:
+        show_themes(questions)
 
     st.subheader("Where Visitors Found Seismo")
     found_via = load_found_via()
@@ -499,6 +586,8 @@ def analytics_tab():
     else:
         st.caption("Real visitors only.")
         bar_chart(found_via, "Visitors", "Where")
+
+    show_private_details(questions)
 
 
 st.html(STYLES)

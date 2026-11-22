@@ -15,6 +15,8 @@ STATUS_NAMES = {
     "empty": "Empty",
     "error": "Error",
 }
+GAP_STATUSES = ["no_match", "not_found"]
+PACIFIC = "America/Vancouver"
 UPPER_WORDS = ["qbr", "ga4", "capi", "pmax", "v2.2"]
 STEP_COLUMNS = {
     "rewrite_seconds": "Understanding the question",
@@ -123,3 +125,49 @@ def average_step_times(questions):
             seconds = 0
         rows.append({"Step": STEP_COLUMNS[column], "Seconds": seconds})
     return pd.DataFrame(rows)
+
+
+def add_themes(questions, themes):
+    """Label each question with its theme name."""
+    labelled = questions.copy()
+    labelled["theme"] = labelled["question"].map(themes)
+    labelled["theme"] = labelled["theme"].fillna("Unsorted")
+    return labelled
+
+
+def count_themes(questions):
+    """Count questions per theme and how many were answered."""
+    rows = []
+    for theme, group in questions.groupby("theme"):
+        answered = group[group["status"] == "ok"]
+        rows.append({
+            "Theme": theme,
+            "Questions": len(group),
+            "Answered": len(answered) / len(group),
+        })
+    return pd.DataFrame(rows)
+
+
+def find_gaps(questions):
+    """Keep questions Seismo looked for but could not answer."""
+    return questions[questions["status"].isin(GAP_STATUSES)]
+
+
+def build_question_table(questions):
+    """Make a readable table of questions, newest first."""
+    table = questions.copy()
+    times = pd.to_datetime(table["time"], utc=True)
+    table["When (Pacific)"] = times.dt.tz_convert(PACIFIC)
+    table["When (Pacific)"] = table["When (Pacific)"].dt.strftime(
+        "%Y-%m-%d %H:%M"
+    )
+    table = table.sort_values("time", ascending=False)
+    columns = {
+        "When (Pacific)": "When (Pacific)",
+        "question": "Question",
+        "theme": "Theme",
+        "outcome": "Outcome",
+        "total_seconds": "Seconds",
+    }
+    table = table[list(columns)].rename(columns=columns)
+    return table
