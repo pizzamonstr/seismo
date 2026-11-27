@@ -33,17 +33,21 @@ OUTCOME_COLOURS = {
 }
 OUTCOME_STAGES = {
     "Answered": "Passed every step",
-    "Related but Unanswered": "Passed the gate, cut at re-rank",
-    "Not About Tephra": "Stopped at the gate",
-    "Declined by Moderation": "Stopped at the check",
-    "Too Long": "Stopped at the check",
-    "Empty": "Stopped at the check",
+    "Related but Unanswered": "Passed the threshold, cut at "
+                              "re-rank",
+    "Not About Tephra": "Stopped at the threshold filter",
+    "Declined by Moderation": "Stopped at the input check",
+    "Too Long": "Stopped at the input check",
+    "Empty": "Stopped at the input check",
     "Error": "Hit an error",
 }
 ROW_HEIGHT = 30
 CHART_PADDING = {"top": 0, "bottom": 0, "left": 0, "right": 0}
 BAR_THICKNESS = 12
 SPLIT_BAR_HEIGHT = 14
+LABELLED_BAR_HEIGHT = 84
+LABEL_OFFSET = 26
+LEADER_LENGTH = 12
 SEGMENT_GAP = 0.004
 LAST_LABELS = [SMALL_THEME_NAME, "Other"]
 
@@ -117,14 +121,31 @@ def split_bar(parts, show_labels):
     layers = [bars]
     height = SPLIT_BAR_HEIGHT + 8
     if show_labels:
+        height = LABELLED_BAR_HEIGHT
+        centre = height / 2
+        bar_top = centre - SPLIT_BAR_HEIGHT / 2
+        bar_bottom = centre + SPLIT_BAR_HEIGHT / 2
         above = parts[parts.index % 2 == 0]
         below = parts[parts.index % 2 == 1]
-        for chosen, offset in [(above, -18), (below, 18)]:
+        above_line = (bar_top - LEADER_LENGTH, bar_top)
+        below_line = (bar_bottom, bar_bottom + LEADER_LENGTH)
+        placements = [
+            (above, -LABEL_OFFSET, above_line),
+            (below, LABEL_OFFSET, below_line),
+        ]
+        for chosen, offset, (line_start, line_end) in placements:
             text = alt.Chart(chosen).mark_text(
                 dy=offset, color=LABEL_GREY, fontSize=12,
             ).encode(x=alt.X("middle:Q", scale=x_scale), text="label:N")
+            leader = alt.Chart(chosen).mark_rule(
+                color=LABEL_GREY, strokeWidth=1,
+            ).encode(
+                x=alt.X("middle:Q", scale=x_scale),
+                y=alt.value(line_start),
+                y2=alt.value(line_end),
+            )
+            layers.append(leader)
             layers.append(text)
-        height = SPLIT_BAR_HEIGHT * 5
 
     chart = alt.layer(*layers).properties(
         height=height, padding=CHART_PADDING,
@@ -146,8 +167,9 @@ def timing_chart(steps):
     split_bar(parts, show_labels=True)
     total = steps["Seconds"].sum()
     st.caption(
-        f"That's {total:.1f} seconds from question to answer, on "
-        "average."
+        f"These four steps take {total:.1f} seconds on average. The "
+        "rest of the Average Answer Time goes mostly to the input "
+        "check and moderation."
     )
 
 
@@ -218,7 +240,7 @@ def show_tiles(questions):
     tiles = [
         ("Questions", summary["questions"]),
         ("Visits", summary["visits"]),
-        ("Average Answer", f"{summary['average_seconds']:.1f} s"),
+        ("Average Answer Time", f"{summary['average_seconds']:.1f} s"),
     ]
     show_tile_grid(tiles, 3)
 

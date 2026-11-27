@@ -49,10 +49,10 @@ PROPER_WORDS = [
 ]
 UPPER_WORDS = ["qbr", "ga4", "capi", "pmax", "v2.2"]
 STEP_COLUMNS = {
-    "rewrite_seconds": "Understanding the question",
-    "search_seconds": "Searching the documents",
-    "rerank_seconds": "Weighing the evidence",
-    "write_seconds": "Writing the answer",
+    "rewrite_seconds": "Rewrite",
+    "search_seconds": "Search",
+    "rerank_seconds": "Re-rank",
+    "write_seconds": "Generate",
 }
 
 

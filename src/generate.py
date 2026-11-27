@@ -201,7 +201,8 @@ def citations_from_mapping(mapping, results):
     """List the cited sources in their new display order."""
     citations = []
     for old_number in mapping:
-        metadata = results[old_number - 1]["metadata"]
+        result = results[old_number - 1]
+        metadata = result["metadata"]
         citation = {
             "number": mapping[old_number],
             "title": metadata["title"],
@@ -209,6 +210,10 @@ def citations_from_mapping(mapping, results):
             "date": metadata.get("date", ""),
             "source": metadata["source"],
             "page": metadata.get("page", ""),
+            "text": result["text"].split("\n\n", 1)[-1],
+            "similarity": result["similarity"],
+            "tier": result.get("tier", ""),
+            "rerank_score": result.get("rerank_score"),
         }
         citations.append(citation)
     return citations

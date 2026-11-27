@@ -12,6 +12,7 @@ from src.embed import get_api_key, get_collection
 from src.generate import (
     EMPTY_MESSAGE,
     ERROR_MESSAGE,
+    MAX_QUESTION_CHARS,
     TOO_LONG_MESSAGE,
     build_fallback_text,
     citations_from_mapping,
@@ -42,6 +43,17 @@ STEP_LABELS = {
 }
 MAX_QUESTIONS_PER_SESSION = 15
 DAILY_QUESTION_CAP = 300
+OPENAI_TIMEOUT_SECONDS = 45
+OPENAI_RETRIES = 1
+SPEND_LIMIT_CODES = [
+    "insufficient_quota",
+    "project_spend_limit_exceeded",
+    "organization_spend_limit_exceeded",
+]
+INTERRUPTED_MESSAGE = (
+    "That answer got cut off because a new question came in. Ask "
+    "it again anytime."
+)
 SESSION_LIMIT_MESSAGE = (
     "That's 15 questions for this visit, which is my limit. Thanks "
     "for digging in with me, and you're welcome back another time."
@@ -59,6 +71,12 @@ ERROR_MESSAGES = {
                   "again?",
     "library": "My document library isn't loaded right now. Please "
                "try again in a few minutes.",
+    "resting": "I've used up my answers for this month, so I'm "
+               "resting until next month. The How It Works tab "
+               "still shows what I can do.",
+    "startup": "I couldn't start up properly, so I can't answer "
+               "questions right now. That's on my end, not yours. "
+               "The How It Works tab still shows what I can do.",
 }
 STYLES = """
 <style>
@@ -105,6 +123,9 @@ div[data-testid="stSelectbox"] div[role="group"] {
 }
 div[data-testid="stTab"] p {
     font-size: 1rem;
+}
+div[data-testid="stExpander"] blockquote {
+    margin: 0;
 }
 .outcome-numbers {
     display: grid;
@@ -188,7 +209,11 @@ def build_links():
 @st.cache_resource
 def load_resources():
     """Open the OpenAI client and database once for every visitor."""
-    openai_client = OpenAI(api_key=get_api_key())
+    openai_client = OpenAI(
+        api_key=get_api_key(),
+        timeout=OPENAI_TIMEOUT_SECONDS,
+        max_retries=OPENAI_RETRIES,
+    )
     collection = get_collection()
     return openai_client, collection
 
@@ -225,6 +250,8 @@ def friendly_error(error):
     """Turn a technical error into a message in Seismo's voice."""
     if isinstance(error, openai.AuthenticationError):
         return ERROR_MESSAGES["key"]
+    if getattr(error, "code", "") in SPEND_LIMIT_CODES:
+        return ERROR_MESSAGES["resting"]
     if isinstance(error, openai.RateLimitError):
         return ERROR_MESSAGES["busy"]
     if isinstance(error, openai.APIConnectionError):
@@ -250,6 +277,29 @@ def start_session():
         st.session_state.visit_id = new_visit_id()
 
 
+def describe_source(citation):
+    """Build the file, page and score line for one source."""
+    parts = [f"File: {citation['source']}"]
+    if citation.get("page", "") not in ["", None]:
+        parts.append(f"Page {citation['page']}")
+    if "similarity" in citation:
+        tier = citation.get("tier", "")
+        parts.append(
+            f"Similarity {citation['similarity']:.2f} ({tier})"
+        )
+    if citation.get("rerank_score") is not None:
+        parts.append(f"Re-rank score {citation['rerank_score']} of 3")
+    return " | ".join(parts)
+
+
+def quote_text(text):
+    """Show retrieved text as a quote, line by line."""
+    lines = []
+    for line in text.split("\n"):
+        lines.append("> " + line + "  ")
+    return "\n".join(lines)
+
+
 def show_sources(citations):
     """List the cited sources in a fold-out panel."""
     if len(citations) == 0:
@@ -260,8 +310,11 @@ def show_sources(citations):
                 f"**[{citation['number']}]** {citation['title']} "
                 f"> {citation['section']}"
             )
-            st.markdown(line)
-            st.caption(citation["source"])
+            source = st.container(gap="small")
+            source.markdown(line)
+            source.caption(describe_source(citation))
+            if citation.get("text", "") != "":
+                source.markdown(quote_text(citation["text"]))
 
 
 def fallback_text(details):
@@ -292,7 +345,7 @@ def build_timings(details, write_seconds, total_seconds):
         f"Rewrite: {details.get('rewrite_seconds', 0):.1f} s",
         f"Search: {search_seconds:.1f} s",
         f"Re-rank: {details.get('rerank_seconds', 0):.1f} s",
-        f"Write: {write_seconds:.1f} s",
+        f"Generate: {write_seconds:.1f} s",
         f"Total: {total_seconds:.1f} s",
     ]
 
@@ -363,6 +416,15 @@ def pick_avatar(role):
     if role == "assistant":
         return SEISMO_AVATAR
     return VISITOR_AVATAR
+
+
+def mark_interrupted():
+    """Add a note where an answer was cut off by a new question."""
+    messages = st.session_state.messages
+    if len(messages) > 0 and messages[-1]["role"] == "user":
+        messages.append(
+            {"role": "assistant", "content": INTERRUPTED_MESSAGE}
+        )
 
 
 def show_history(with_starters):
@@ -477,6 +539,7 @@ def chat_tab(openai_client, collection):
 
     question = st.chat_input(
         "Ask why a Tephra metric moved",
+        max_chars=MAX_QUESTION_CHARS,
         disabled=limit_text != "",
     )
     below = st.container()
@@ -484,6 +547,7 @@ def chat_tab(openai_client, collection):
         question = st.session_state.starter
         st.session_state.starter = ""
 
+    mark_interrupted()
     no_messages = len(st.session_state.messages) == 0
     with_starters = no_messages and not question and limit_text == ""
 
@@ -557,7 +621,11 @@ st.caption(
     "created for this project."
 )
 
-openai_client, collection = load_resources()
+try:
+    openai_client, collection = load_resources()
+except Exception as error:
+    print(f"Startup error: {error}")
+    openai_client, collection = None, None
 
 chat, how_it_works, analytics = st.tabs([
     ":material/forum: Chat",
@@ -565,7 +633,11 @@ chat, how_it_works, analytics = st.tabs([
     ":material/monitoring: Analytics",
 ])
 with chat:
-    chat_tab(openai_client, collection)
+    if openai_client is None:
+        with st.chat_message("assistant", avatar=SEISMO_AVATAR):
+            st.markdown(ERROR_MESSAGES["startup"])
+    else:
+        chat_tab(openai_client, collection)
 with how_it_works:
     show_how_it_works()
 with analytics:

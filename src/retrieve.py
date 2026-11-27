@@ -24,9 +24,9 @@ SEARCH_DEPTH = 150
 MAX_SOURCES_PER_SECTION = 2
 MAX_CHUNKS_PER_SECTION = 2
 MAX_FILES_PER_SECTION_NAME = 3
-SEATS_PER_MONTH = 2
+FALLBACK_MONTH_QUOTA = 2
 MONTH_CANDIDATES = 8
-MONTH_SEATS_PER_FOLDER = 2
+MONTH_QUOTA_PER_FOLDER = 2
 FOLDER_CANDIDATES = 2
 CAUSE_CANDIDATES = 10
 CAUSE_MONTH_CANDIDATES = 4
@@ -315,29 +315,30 @@ def add_to_pool(pool, tracker, result):
     tracker["names"][metadata["section"]] = sources
 
 
-def add_general_seats(pool, tracker, collection, embedding, seats):
+def add_general_candidates(pool, tracker, collection, embedding,
+                           quota):
     """Add the closest chunks from the whole collection."""
     found = search(collection, embedding, SEARCH_DEPTH)
     added = 0
     for result in build_results(found, False):
-        if added == seats:
+        if added == quota:
             break
         if fits_pool(result, tracker, True):
             add_to_pool(pool, tracker, result)
             added = added + 1
 
 
-def add_month_seats(pool, tracker, collection, embedding, labels,
-                    seats):
-    """Add the closest chunks from one month, spread by folder."""
+def add_month_quota(pool, tracker, collection, embedding, labels,
+                    quota):
+    """Add a quota of the closest chunks from one month."""
     where = {"month": {"$in": labels}}
     found = search(collection, embedding, SEARCH_DEPTH, where)
     tracker["folders"] = {}
     added = 0
     for result in build_results(found, True):
-        if added == seats:
+        if added == quota:
             break
-        limit = MONTH_SEATS_PER_FOLDER
+        limit = MONTH_QUOTA_PER_FOLDER
         if fits_pool(result, tracker, False, limit):
             add_to_pool(pool, tracker, result)
             folder = result["metadata"]["folder"]
@@ -346,8 +347,8 @@ def add_month_seats(pool, tracker, collection, embedding, labels,
             added = added + 1
 
 
-def add_folder_seats(pool, tracker, collection, embedding):
-    """Add the closest chunks from each document folder."""
+def add_folder_quota(pool, tracker, collection, embedding):
+    """Add a quota of the closest chunks from each folder."""
     for folder in find_folders():
         where = {"folder": folder}
         depth = FOLDER_CANDIDATES * 5
@@ -362,29 +363,29 @@ def add_folder_seats(pool, tracker, collection, embedding):
 
 
 def build_pool(collection, embeddings, months):
-    """Gather varied candidates: overall, per month, per folder."""
+    """Stratified retrieval: overall, per month, per folder."""
     pool = []
     tracker = make_tracker()
 
     main = embeddings[0]
-    add_general_seats(pool, tracker, collection, main, CANDIDATES)
+    add_general_candidates(pool, tracker, collection, main, CANDIDATES)
     for labels in months:
-        add_month_seats(
+        add_month_quota(
             pool, tracker, collection, main, labels,
             MONTH_CANDIDATES,
         )
 
-    add_folder_seats(pool, tracker, collection, main)
+    add_folder_quota(pool, tracker, collection, main)
     for result in pool:
         result["cause_match"] = False
 
     for cause in embeddings[1:]:
         start = len(pool)
-        add_general_seats(
+        add_general_candidates(
             pool, tracker, collection, cause, CAUSE_CANDIDATES
         )
         for labels in months:
-            add_month_seats(
+            add_month_quota(
                 pool, tracker, collection, cause, labels,
                 CAUSE_MONTH_CANDIDATES,
             )
@@ -428,8 +429,8 @@ def pick_without_rerank(passed, month_count):
         else:
             general.append(result)
     picked = pick_varied(general, TOP_K)
-    seats = SEATS_PER_MONTH * month_count
-    picked = picked + month_results[:seats]
+    quota = FALLBACK_MONTH_QUOTA * month_count
+    picked = picked + month_results[:quota]
     return sorted(picked, key=get_similarity, reverse=True)
 
 
