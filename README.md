@@ -106,8 +106,9 @@ this project.
 
 7. **Query:**
    - **Input check:** empty questions and questions over 500
-     characters are rejected, and OpenAI moderation declines
-     harmful ones.
+     characters are rejected, a guardrail declines requests for
+     secrets or attempts to override Seismo's rules, and OpenAI
+     moderation declines harmful questions.
    - **Query rewrite:** GPT-6 Luna fixes spelling, rewrites
      follow-ups as standalone questions using the previous question,
      and expands abbreviations using a glossary.
@@ -251,6 +252,9 @@ hold up.
   file is never committed.
 - Sources are fenced off and treated as data, not instructions, to
   guard against prompt injection.
+- A guardrail in the input check declines requests for keys,
+  passwords or Seismo's instructions, and attempts to override its
+  rules, before any search runs.
 - OpenAI moderation declines harmful questions.
 - Each visit is limited to 15 questions, and the app to 300 a day.
   OpenAI spending is capped with a hard monthly limit.

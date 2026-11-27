@@ -11,6 +11,7 @@ STATUS_NAMES = {
     "no_match": "Not About Tephra",
     "not_found": "Related but Unanswered",
     "flagged": "Declined by Moderation",
+    "guarded": "Declined by Guardrail",
     "too_long": "Too Long",
     "empty": "Empty",
     "error": "Error",

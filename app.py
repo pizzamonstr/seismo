@@ -379,7 +379,7 @@ def answer_in_chat(question, openai_client, collection):
         )
         if len(results) == 0:
             summary = "No Matching Documents"
-            if details["status"] == "flagged":
+            if details["status"] in ["flagged", "guarded"]:
                 summary = "Declined"
             status.update(label=summary, state="complete")
             details["total_seconds"] = time.perf_counter() - start

@@ -37,6 +37,7 @@ OUTCOME_STAGES = {
                               "re-rank",
     "Not About Tephra": "Stopped at the threshold filter",
     "Declined by Moderation": "Stopped at the input check",
+    "Declined by Guardrail": "Stopped at the input check",
     "Too Long": "Stopped at the input check",
     "Empty": "Stopped at the input check",
     "Error": "Hit an error",

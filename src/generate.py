@@ -105,6 +105,40 @@ FLAGGED_MESSAGE = (
     "Tephra's marketing, sales and the numbers behind them."
 )
 
+PRIVATE_MESSAGE = (
+    "That stays private, sorry. I don't share keys, passwords or "
+    "how I'm set up. I'm here for questions about Tephra's "
+    "marketing, sales and campaigns, so ask me why a number moved "
+    "and I'll dig in."
+)
+
+OVERRIDE_MESSAGE = (
+    "I'll stick to what I'm here for: Tephra's marketing, sales and "
+    "campaigns. Ask me why a number moved and I'll dig in."
+)
+
+PRIVATE_PATTERNS = [
+    r"\bapi[\s_-]?keys?\b",
+    r"\bsecret[\s_-]?keys?\b",
+    r"\baccess[\s_-]?keys?\b",
+    r"\bpasswords?\b",
+    r"\bcredentials?\b",
+    r"\bsecrets\.toml\b",
+    r"\benvironment variables?\b",
+    r"\bsystem[\s_-]?prompt\b",
+    r"\byour (instructions|rules|prompt|guidelines)\b",
+]
+
+OVERRIDE_PATTERNS = [
+    r"\b(ignore|disregard|forget|override)\b.{0,40}"
+    r"\b(instructions|rules|prompt|guidelines)\b",
+    r"\byou are now\b",
+    r"\bpretend (to be|you are|you're)\b",
+    r"\bact as if\b",
+    r"\bjailbreak\b",
+    r"\bdeveloper mode\b",
+]
+
 ERROR_MESSAGE = (
     "I found the right docs, but hit a snag writing the answer. "
     "Give it a moment and try again?"
@@ -240,11 +274,33 @@ def build_not_found_text(closest):
 
 def build_fallback_text(details):
     """Pick the message to show when there is no evidence."""
+    if details["status"] == "guarded":
+        if details.get("guard") == "private":
+            return PRIVATE_MESSAGE
+        return OVERRIDE_MESSAGE
     if details["status"] == "flagged":
         return FLAGGED_MESSAGE
     if details["status"] == "no_match":
         return NO_MATCH_MESSAGE
     return build_not_found_text(details["closest"])
+
+
+def matches_any(text, patterns):
+    """Check if the text matches any of the patterns."""
+    for pattern in patterns:
+        if re.search(pattern, text) is not None:
+            return True
+    return False
+
+
+def find_guard(question):
+    """Spot requests for secrets or to override the rules."""
+    text = question.lower()
+    if matches_any(text, PRIVATE_PATTERNS):
+        return "private"
+    if matches_any(text, OVERRIDE_PATTERNS):
+        return "override"
+    return ""
 
 
 def is_flagged(question, openai_client):
@@ -268,6 +324,10 @@ def prepare(question, openai_client, collection,
         return question, [], details
     if len(question) > MAX_QUESTION_CHARS:
         details = {"status": "too_long"}
+        return question, [], details
+    guard = find_guard(question)
+    if guard != "":
+        details = {"status": "guarded", "guard": guard}
         return question, [], details
     if is_flagged(question, openai_client):
         details = {"status": "flagged"}
