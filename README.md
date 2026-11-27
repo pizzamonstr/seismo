@@ -16,7 +16,8 @@ this project.
 ## Repository Structure
 
 - `app.py`: contains the Streamlit app, with the Chat, How It Works
-  and Analytics tabs.
+  and Analytics tabs, and a settings sidebar that shows the models,
+  retrieval settings and questions left in the visit.
 - `src/load.py`: contains document loading for PDF, markdown and
   .txt files.
 - `src/clean.py`: contains text cleaning, including PDF table

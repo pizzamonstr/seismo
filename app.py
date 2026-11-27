@@ -20,7 +20,18 @@ from src.generate import (
     renumber_stream,
     stream_answer,
 )
+from src.embed import EMBEDDING_MODEL
+from src.generate import CHAT_MODEL, MODERATION_MODEL
 from src.how_it_works import build_proof_line, show_how_it_works
+from src.rerank import RERANK_MODEL
+from src.retrieve import (
+    RERANK_KEEP,
+    RERANK_MIN_SCORE,
+    SEARCH_DEPTH,
+    THRESHOLD,
+    WEAK_SCORE,
+)
+from src.rewrite import REWRITE_MODEL
 from src.usage_log import log_found_via, log_question, new_visit_id
 
 st.set_page_config(page_title="Seismo", layout="centered")
@@ -204,6 +215,43 @@ def build_links():
         if url != "":
             links.append(f"[{name}]({url})")
     return " | ".join(links)
+
+
+def build_settings_text():
+    """List the fixed models and retrieval settings."""
+    lines = [
+        "**Models**",
+        f"- Embeddings: {EMBEDDING_MODEL}",
+        f"- Query rewrite: {REWRITE_MODEL}",
+        f"- Re-rank: {RERANK_MODEL}",
+        f"- Answers: {CHAT_MODEL}",
+        f"- Moderation: {MODERATION_MODEL}",
+        "",
+        "**Retrieval**",
+        f"- Search depth: {SEARCH_DEPTH} chunks",
+        f"- Similarity threshold: {THRESHOLD:.2f}",
+        f"- Re-rank floor: {WEAK_SCORE:.2f} similarity",
+        f"- Re-rank cut: {RERANK_MIN_SCORE} of 3",
+        f"- Top-k: up to {RERANK_KEEP} chunks",
+    ]
+    return "\n".join(lines)
+
+
+def show_sidebar():
+    """Show the settings and how many questions are left."""
+    with st.sidebar:
+        st.header("Settings")
+        st.caption(
+            "These are fixed for every visitor, so answers match the "
+            "tested version."
+        )
+        st.markdown(build_settings_text())
+        st.subheader("This Visit")
+        used = st.session_state.get("questions_asked", 0)
+        left = max(MAX_QUESTIONS_PER_SESSION - used, 0)
+        st.markdown(
+            f"Questions left: {left} of {MAX_QUESTIONS_PER_SESSION}"
+        )
 
 
 @st.cache_resource
@@ -652,3 +700,4 @@ with how_it_works:
     show_how_it_works()
 with analytics:
     show_analytics(openai_client)
+show_sidebar()
