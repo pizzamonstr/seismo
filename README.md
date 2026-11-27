@@ -147,9 +147,10 @@ this project.
 11. **Cite:** the model tags each claim with its source, and the
     tags are renumbered in the order they appear. A View Sources
     panel under each answer shows, for every cited chunk, the
-    document and section, the file name and page, the similarity
-    score with its relevance tier, the re-rank score and the
-    retrieved text itself.
+    document and section, the file name, page and chunk ID, the
+    similarity score with its relevance tier, the cosine distance,
+    the re-rank score and the retrieved text itself. A timing
+    breakdown above each answer shows the latency of each step.
 
 ### Top-K and Thresholds
 
