@@ -278,18 +278,28 @@ def start_session():
 
 
 def describe_source(citation):
-    """Build the file, page and score line for one source."""
-    parts = [f"File: {citation['source']}"]
+    """Build the location line and the score line for one source."""
+    location = [f"File: {citation['source']}"]
     if citation.get("page", "") not in ["", None]:
-        parts.append(f"Page {citation['page']}")
+        location.append(f"Page {citation['page']}")
+    if citation.get("chunk_id", "") != "":
+        location.append(f"Chunk ID: {citation['chunk_id']}")
+
+    scores = []
     if "similarity" in citation:
         tier = citation.get("tier", "")
-        parts.append(
+        scores.append(
             f"Similarity {citation['similarity']:.2f} ({tier})"
         )
+    if citation.get("distance") is not None:
+        scores.append(f"Cosine distance {citation['distance']:.2f}")
     if citation.get("rerank_score") is not None:
-        parts.append(f"Re-rank score {citation['rerank_score']} of 3")
-    return " | ".join(parts)
+        scores.append(f"Re-rank score {citation['rerank_score']} of 3")
+
+    lines = [" | ".join(location)]
+    if len(scores) > 0:
+        lines.append(" | ".join(scores))
+    return "  \n".join(lines)
 
 
 def quote_text(text):

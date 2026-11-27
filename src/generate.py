@@ -28,6 +28,8 @@ like "extreme", "gnarly" or "epic", and go easy on exclamation \
 marks.
 - Clarity comes first. Never let the tone blur a number, a date \
 or a citation.
+- Do not use em dashes or en dashes. Use commas, colons or \
+separate sentences instead.
 
 How to answer:
 - Use only the numbered sources in the user message. Do not use \
@@ -212,6 +214,8 @@ def citations_from_mapping(mapping, results):
             "page": metadata.get("page", ""),
             "text": result["text"].split("\n\n", 1)[-1],
             "similarity": result["similarity"],
+            "distance": result.get("distance"),
+            "chunk_id": result.get("chunk_id", ""),
             "tier": result.get("tier", ""),
             "rerank_score": result.get("rerank_score"),
         }
